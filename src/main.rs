@@ -52,6 +52,11 @@ fn main() {
                 println!("OK");
             }
             Command::Ping => println!("PONG"),
+            Command::Stats => {
+                let stats = store.stats();
+                println!("keys: {}", stats.keys);
+                println!("operations: {}", stats.operations);
+            }
             Command::Exit => break,
         }
     }

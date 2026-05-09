@@ -9,7 +9,8 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 
 - In-memory key-value store (`HashMap<String, String>`)
 - CLI-based REPL interface
-- Supported commands: `SET`, `GET`, `DEL`, `PING`, `EXIT`, `QUIT`
+- Supported commands: `SET`, `GET`, `DEL`, `PING`, `STATS`, `EXIT`, `QUIT`
+- Built-in runtime stats for keys and operations
 - Rust-based performance and safety
 - Modular architecture designed for future TCP integration
 
@@ -86,6 +87,10 @@ OK
 
 river > GET name
 NULL
+
+river > STATS
+keys: 0
+operations: 4
 ```
 
 ### Input Rules (Strict)
@@ -103,7 +108,7 @@ src/
   main.rs            # REPL + command dispatch
   store/
     mod.rs
-    engine.rs        # RiverStore (HashMap-based)
+    engine.rs        # RiverStore (HashMap-based data + metrics)
   commands/
     mod.rs
     parser.rs        # Input cleaning + parsing into Command enum
@@ -121,6 +126,7 @@ docs/
 Planned next steps:
 
 - TCP server: accept client connections and reuse the same parser + command layer
+- INFO command: richer runtime introspection (uptime, memory hints, persistence state)
 - Persistence: write snapshots / logs (planned via `serde` + `bincode`)
 - Benchmarking: measure throughput/latency (Criterion)
 - Concurrency improvements: shared state, locking strategy, and command handling under load
@@ -142,4 +148,3 @@ River is intentionally small and readable. If you want to contribute:
 Start by reading:
 - `docs/overview.md`
 - `docs/architecture.md`
-

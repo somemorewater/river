@@ -56,6 +56,19 @@ Health check / connectivity check (useful later for TCP).
 Response:
 - `PONG`
 
+### `STATS` / `/STATS`
+
+Prints runtime store metrics.
+
+Response:
+
+```
+keys: 3
+operations: 12
+```
+
+The operations count includes `SET`, `GET`, and `DEL` calls. Calling `STATS` does not increment the operations counter.
+
 ### `EXIT` / `QUIT`
 
 Stops the program.
@@ -84,6 +97,6 @@ Examples:
 - `HELLO` → `ERROR: Unknown command`
 - `GET` (missing key) → `ERROR: Invalid syntax`
 - `PING now` (extra arguments) → `ERROR: Invalid syntax`
+- `STATS extra` → `ERROR: Invalid syntax`
 
 The system is designed to never panic on user input.
-

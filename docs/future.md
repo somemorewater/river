@@ -36,6 +36,18 @@ Potential approaches:
 
 The crate dependencies already include `serde` and `bincode`, which can be used later for serialization, but persistence is not implemented yet.
 
+## INFO Command
+
+`STATS` currently exposes key count and operation count. A future `INFO` command can build on the same store-owned metrics model.
+
+Possible fields:
+
+- Key count
+- Operation count
+- Uptime
+- Approximate memory usage
+- Persistence status
+
 ## Benchmarking
 
 River can be benchmarked to understand the costs of parsing, dispatch, and storage operations.
@@ -53,4 +65,3 @@ Possible improvements:
 - Dedicated worker model for command execution
 
 The project already depends on Tokio, but the current stage is intentionally synchronous (no async networking yet).
-

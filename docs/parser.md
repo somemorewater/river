@@ -26,6 +26,7 @@ This makes the storage engine independent of any particular input transport.
    - `GET` requires 1 arg (`key`)
    - `DEL` requires 1 arg (`key`)
    - `PING` requires 0 args
+   - `STATS`/`/STATS` require 0 args
    - `EXIT`/`QUIT` require 0 args
 
 ## Output Types
@@ -37,6 +38,7 @@ The parser returns a `Command` enum to represent work to be done, for example:
 - `Command::Set { key, value }`
 - `Command::Get { key }`
 - `Command::Ping`
+- `Command::Stats`
 
 ### `ParseError`
 
@@ -64,4 +66,3 @@ write response
 ```
 
 Transport changes; parsing and storage do not.
-

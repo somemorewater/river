@@ -46,6 +46,8 @@ River keeps parsing and storage separate for three reasons:
 
 - Manage in-memory state (`HashMap<String, String>`)
 - Implement `set`, `get`, and `delete` operations
+- Track lightweight runtime metrics (`keys`, `operations`)
+- Expose read-only stats through `store.stats()`
 
 ## Designing for Networking (Next Stage)
 
@@ -67,3 +69,20 @@ write response
 
 The important idea is: **only the input/output transport changes**, not the parser or storage engine.
 
+## Observability Path
+
+River’s stats flow follows the same separation:
+
+```
+CLI Input (`STATS`)
+  ↓
+Parser (`Command::Stats`)
+  ↓
+Command Handler
+  ↓
+RiverStore::stats()
+  ↓
+keys / operations response
+```
+
+Metrics are intentionally owned by the store. The REPL does not calculate key counts or operation totals itself.
