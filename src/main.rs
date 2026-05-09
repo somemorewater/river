@@ -1,15 +1,58 @@
+mod commands;
 mod store;
 
+use commands::parser::{parse_line, Command, ParseError};
 use store::engine::RiverStore;
+use std::io::{self, Write};
 
 fn main() {
-    let mut river = RiverStore::new();
+    let mut store = RiverStore::new();
+    println!("River DB started");
 
-    river.set("name".to_string(), "Water".to_string());
+    let stdin = io::stdin();
+    let mut line = String::new();
 
-    println!("{:?}", river.get("name"));
+    loop {
+        print!("river > ");
+        if io::stdout().flush().is_err() {
+            break;
+        }
 
-    river.delete("name");
+        line.clear();
+        match stdin.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(_) => break,
+        }
 
-    println!("{:?}", river.get("name"));
+        let command = match parse_line(&line) {
+            Ok(Some(command)) => command,
+            Ok(None) => continue,
+            Err(ParseError::UnknownCommand) => {
+                println!("ERROR: Unknown command");
+                continue;
+            }
+            Err(ParseError::InvalidSyntax) => {
+                println!("ERROR: Invalid syntax");
+                continue;
+            }
+        };
+
+        match command {
+            Command::Set { key, value } => {
+                store.set(key, value);
+                println!("OK");
+            }
+            Command::Get { key } => match store.get(&key) {
+                Some(value) => println!("{value}"),
+                None => println!("NULL"),
+            },
+            Command::Del { key } => {
+                store.delete(&key);
+                println!("OK");
+            }
+            Command::Ping => println!("PONG"),
+            Command::Exit => break,
+        }
+    }
 }
