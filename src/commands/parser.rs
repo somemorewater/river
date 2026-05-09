@@ -66,4 +66,3 @@ pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
         _ => Err(ParseError::UnknownCommand),
     }
 }
-

@@ -1,9 +1,9 @@
 mod commands;
 mod store;
 
-use commands::parser::{parse_line, Command, ParseError};
-use store::engine::RiverStore;
+use commands::parser::{Command, ParseError, parse_line};
 use std::io::{self, Write};
+use store::engine::RiverStore;
 
 fn main() {
     let mut store = RiverStore::new();

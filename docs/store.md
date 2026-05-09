@@ -1,0 +1,72 @@
+# Store Engine (`RiverStore`)
+
+River’s storage engine is currently a single struct: `RiverStore`, backed by an in-memory `HashMap<String, String>`.
+
+Source:
+- `src/store/engine.rs`
+
+## The `RiverStore` Struct
+
+Conceptually:
+
+```
+RiverStore
+  └── data: HashMap<String, String>
+```
+
+It stores string keys and string values. This keeps the initial system simple while the project focuses on parsing, command dispatch, and clean architecture.
+
+## Operations
+
+### `set(key, value)`
+
+Stores a value under a key:
+
+- If the key does not exist, it is inserted.
+- If the key already exists, it is overwritten.
+
+### `get(key)`
+
+Fetches the value for a key:
+
+- Returns `Some(&String)` if present
+- Returns `None` if missing
+
+The REPL layer converts this into user-facing output:
+
+- present → prints the value
+- missing → prints `NULL`
+
+### `delete(key)`
+
+Removes a key from the store:
+
+- If the key exists, it is removed.
+- If it does not exist, the operation is still safe (no error).
+
+The REPL prints `OK` for `DEL` regardless of whether the key existed. This keeps the interface simple and predictable.
+
+## Why `HashMap`?
+
+`HashMap` is a natural starting point for an in-memory key-value store:
+
+- Average-case **O(1)** insert/get/delete
+- Simple and familiar API
+- Good enough performance for early experimentation
+
+As River evolves, `HashMap` can be replaced or wrapped with more advanced designs:
+
+- Sharding for concurrency
+- Custom allocators or memory layouts
+- Persistence layers (snapshotting / append-only logs)
+
+## Memory Behavior (High Level)
+
+Because the store is in-memory:
+
+- All keys and values live in the process heap.
+- Each `SET` allocates (or reuses) memory for the stored strings.
+- `DEL` removes entries, and memory may be reclaimed by Rust’s allocator over time.
+
+In this stage, River does not attempt to control allocation strategy; correctness and clarity come first.
+
