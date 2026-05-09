@@ -4,10 +4,12 @@ This document describes how River is organized today and why the modules are sep
 
 ## System Flow
 
-River currently behaves like a tiny Redis-style interface:
+River currently behaves like a tiny Redis-style TCP database server:
 
 ```
-CLI Input
+TCP Client
+  ↓
+TCP Layer
   ↓
 Parser
   ↓
@@ -20,10 +22,11 @@ Response
 
 Mapping to code:
 
-- **CLI Input / REPL**: `src/main.rs`
+- **TCP Layer**: `src/server/tcp.rs`
 - **Parser**: `src/commands/parser.rs`
-- **Command Handler**: `src/main.rs` (the `match` over `Command`)
+- **Command Handler**: `src/commands/mod.rs`
 - **Store**: `src/store/engine.rs`
+- **Bootstrap**: `src/main.rs`
 
 ## Why Modular Design?
 
@@ -31,7 +34,7 @@ River keeps parsing and storage separate for three reasons:
 
 1. **Correctness and safety**: parsing and validation are centralized; the store never needs to interpret raw user input.
 2. **Testability**: the parser and store can be tested independently.
-3. **Future transport support**: a TCP server can accept bytes/lines, then reuse the exact same parser and dispatch logic.
+3. **Future transport support**: HTTP, RESP, or a CLI can reuse the same parser and dispatch logic.
 
 ## Parser vs. Storage Responsibilities
 
@@ -42,6 +45,12 @@ River keeps parsing and storage separate for three reasons:
 - Validate command names and argument counts
 - Return a structured `Command` value or a specific error
 
+**Command responsibilities** (`commands` module):
+
+- Convert parsed commands into store operations
+- Format user-facing responses
+- Map parser errors to stable error strings
+
 **Storage responsibilities** (`store` module):
 
 - Manage in-memory state (`HashMap<String, String>`)
@@ -49,9 +58,9 @@ River keeps parsing and storage separate for three reasons:
 - Track lightweight runtime metrics (`keys`, `operations`)
 - Expose read-only stats through `store.stats()`
 
-## Designing for Networking (Next Stage)
+## TCP Networking
 
-A future TCP server can be layered on top without changing the store:
+TCP is isolated in `src/server/tcp.rs`:
 
 ```
 TCP connection
@@ -60,21 +69,21 @@ read line / frame
   ↓
 commands::parser::parse_line
   ↓
-dispatch (same match as REPL)
+commands::handle_input
   ↓
 RiverStore
   ↓
 write response
 ```
 
-The important idea is: **only the input/output transport changes**, not the parser or storage engine.
+Each client connection runs in its own Tokio task. Shared database state is protected with `Arc<tokio::sync::Mutex<RiverStore>>`.
 
 ## Observability Path
 
 River’s stats flow follows the same separation:
 
 ```
-CLI Input (`STATS`)
+TCP Input (`STATS`)
   ↓
 Parser (`Command::Stats`)
   ↓
@@ -85,4 +94,4 @@ RiverStore::stats()
 keys / operations response
 ```
 
-Metrics are intentionally owned by the store. The REPL does not calculate key counts or operation totals itself.
+Metrics are intentionally owned by the store. The TCP layer does not calculate key counts or operation totals itself.

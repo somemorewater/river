@@ -8,32 +8,35 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 ## Features
 
 - In-memory key-value store (`HashMap<String, String>`)
-- CLI-based REPL interface
-- Supported commands: `SET`, `GET`, `DEL`, `PING`, `STATS`, `EXIT`, `QUIT`
+- Tokio-based TCP server on `127.0.0.1:6379`
+- Shared in-memory state across multiple clients
+- Supported commands: `SET`, `GET`, `DEL`, `PING`, `STATS`, `HEALTH`, `EXIT`, `QUIT`
 - Built-in runtime stats for keys and operations
 - Rust-based performance and safety
-- Modular architecture designed for future TCP integration
+- Modular architecture with networking isolated in `server/`
 
 ## Architecture Overview
 
 Current data flow:
 
 ```
-User Input (stdin)
+TCP Client
+  ↓
+TCP Layer
   ↓
 Input Cleaning + Parsing
   ↓
-Command Handler (main loop)
+Command Execution
   ↓
 RiverStore (HashMap)
   ↓
-Response (stdout)
+Response (socket)
 ```
 
-Conceptually, the project is structured so the parser can be reused later:
+The same command path can be reused by future transports:
 
 ```
-TCP Client / CLI
+TCP / HTTP / CLI / RESP
   ↓
 Parser
   ↓
@@ -55,7 +58,7 @@ cargo build
 
 ## Running
 
-Start the interactive REPL:
+Start the TCP server:
 
 ```bash
 cargo run
@@ -64,33 +67,48 @@ cargo run
 You should see:
 
 ```
-River DB started
-river >
+River DB server started on 127.0.0.1:6379
 ```
 
-Exit with `EXIT`, `QUIT`, or EOF (Ctrl-D).
+If port `6379` is already in use, run on another local port:
+
+```bash
+RIVER_ADDR=127.0.0.1:6380 cargo run
+```
+
+Connect with `nc` or `telnet` from another terminal:
+
+```bash
+nc 127.0.0.1 6379
+```
 
 ## Usage Examples
 
 ```
-river > PING
+PING
 PONG
 
-river > SET name Water
+SET name Water
 OK
 
-river > GET name
+GET name
 Water
 
-river > DEL name
+DEL name
 OK
 
-river > GET name
+GET name
 NULL
 
-river > STATS
+STATS
 keys: 0
 operations: 4
+
+HEALTH
+status: OK
+keys: 0
+operations: 4
+uptime: 0
 ```
 
 ### Input Rules (Strict)
@@ -105,18 +123,22 @@ operations: 4
 
 ```
 src/
-  main.rs            # REPL + command dispatch
+  main.rs            # Bootstrap/start TCP server
   store/
     mod.rs
     engine.rs        # RiverStore (HashMap-based data + metrics)
   commands/
-    mod.rs
+    mod.rs           # Command execution + response formatting
     parser.rs        # Input cleaning + parsing into Command enum
+  server/
+    mod.rs
+    tcp.rs           # Tokio TCP listener + client handling
 docs/
   overview.md
   architecture.md
   commands.md
   parser.md
+  server.md
   store.md
   future.md
 ```
@@ -126,7 +148,8 @@ docs/
 Planned next steps:
 
 - TCP server: accept client connections and reuse the same parser + command layer
-- INFO command: richer runtime introspection (uptime, memory hints, persistence state)
+- INFO command: richer runtime introspection (memory hints, persistence state)
+- RESP protocol support
 - Persistence: write snapshots / logs (planned via `serde` + `bincode`)
 - Benchmarking: measure throughput/latency (Criterion)
 - Concurrency improvements: shared state, locking strategy, and command handling under load

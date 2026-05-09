@@ -2,28 +2,15 @@
 
 River is intentionally built in stages. This document outlines likely next steps and what they imply for the codebase.
 
-## TCP Server
+## Protocols
 
-Add a server that accepts client connections and handles commands over a socket.
+River now has a line-based TCP server. Future protocol work can build on that networking layer.
 
-Key design goal:
-- Reuse the existing parsing layer (`commands::parser`) and the same command dispatch logic as the REPL.
+Potential protocol upgrades:
 
-Expected shape:
-
-```
-TCP listener
-  ↓
-accept connection
-  ↓
-read line / frame
-  ↓
-parse command
-  ↓
-execute against store
-  ↓
-write response
-```
+- RESP support for Redis-like clients
+- HTTP endpoints for status or diagnostics
+- Authentication handshake before command execution
 
 ## Persistence (Snapshots / Logs)
 
@@ -52,11 +39,11 @@ Possible fields:
 
 River can be benchmarked to understand the costs of parsing, dispatch, and storage operations.
 
-The project includes Criterion as a dev-dependency; benchmarks can be added once stable command handling and (later) networking exist.
+The project includes Criterion as a dev-dependency; benchmarks can measure parser, store, and TCP command round-trip behavior.
 
 ## Concurrency Upgrades
 
-Once multiple clients are supported, concurrency becomes important.
+Multiple clients are supported through Tokio tasks and shared state behind a mutex. Future work can improve throughput under load.
 
 Possible improvements:
 
@@ -64,4 +51,4 @@ Possible improvements:
 - Sharded `HashMap` to reduce lock contention
 - Dedicated worker model for command execution
 
-The project already depends on Tokio, but the current stage is intentionally synchronous (no async networking yet).
+The current server uses Tokio for async networking.

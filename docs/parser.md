@@ -9,7 +9,7 @@ Source:
 
 The parser’s job is to convert raw user input into a structured representation:
 
-- Input: `&str` (a line from the REPL or a future TCP client)
+- Input: `&str` (a line from a TCP client or another future transport)
 - Output: `Option<Command>` or a `ParseError`
 
 This makes the storage engine independent of any particular input transport.
@@ -27,6 +27,7 @@ This makes the storage engine independent of any particular input transport.
    - `DEL` requires 1 arg (`key`)
    - `PING` requires 0 args
    - `STATS`/`/STATS` require 0 args
+   - `HEALTH`/`/HEALTH` require 0 args
    - `EXIT`/`QUIT` require 0 args
 
 ## Output Types
@@ -39,6 +40,7 @@ The parser returns a `Command` enum to represent work to be done, for example:
 - `Command::Get { key }`
 - `Command::Ping`
 - `Command::Stats`
+- `Command::Health`
 
 ### `ParseError`
 
@@ -47,13 +49,13 @@ The parser can return:
 - `UnknownCommand`: the command name is not recognized
 - `InvalidSyntax`: wrong number of arguments for a recognized command
 
-The REPL decides how to print these errors.
+The command handler decides how to print these errors.
 
-## Future TCP Integration
+## Transport Reuse
 
-Because the parser operates on `&str` and returns a structured `Command`, it can be reused as-is when River adds networking.
+Because the parser operates on `&str` and returns a structured `Command`, it is independent of TCP. Future transports can reuse it.
 
-The future TCP server’s flow will look like:
+Current TCP flow:
 
 ```
 read line from socket

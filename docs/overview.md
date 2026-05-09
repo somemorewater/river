@@ -1,7 +1,7 @@
 # River Overview
 
 River is a small, experimental in-memory key-value data store written in Rust.
-The current implementation focuses on clarity and modularity: a REPL reads user input, a parser turns input into structured commands, and a store engine executes those commands against an in-memory `HashMap`.
+The current implementation focuses on clarity and modularity: a Tokio TCP server reads client input, a parser turns input into structured commands, and a store engine executes those commands against an in-memory `HashMap`.
 
 ## Goals
 
@@ -11,39 +11,42 @@ The current implementation focuses on clarity and modularity: a REPL reads user 
 
 ## Non-Goals (for now)
 
-- No networking (TCP server) yet
 - No persistence (snapshots / AOF) yet
-- No concurrency optimizations yet
+- No advanced concurrency optimizations yet
 - No advanced query language; only a small command set
 
 ## High-Level Architecture
 
 ```
-stdin (user input)
+TCP client
+  ↓
+server::tcp (line-based networking)
   ↓
 commands::parser (clean + parse)
   ↓
-main.rs (dispatch / command handler)
+commands::handle_input (execute + format)
   ↓
 store::engine::RiverStore (HashMap)
   ↓
-stdout (response)
+socket response
 ```
 
 ## Data Flow
 
-1. The REPL prints a prompt (`river >`) and waits for a line from `stdin`.
-2. The line is cleaned and parsed into a `Command` enum (or rejected with an error).
-3. `main.rs` dispatches the parsed `Command` to `RiverStore`.
-4. A response is printed to `stdout` in a predictable format (`OK`, `NULL`, `PONG`, stats output, or `ERROR: ...`).
+1. The TCP server accepts a client connection on `127.0.0.1:6379`.
+2. Each connected client is handled in its own Tokio task.
+3. A socket line is cleaned and parsed into a `Command` enum (or rejected with an error).
+4. The command module executes the command against shared `RiverStore` state.
+5. A response is written back to the client in a predictable format (`OK`, `NULL`, `PONG`, health/stats output, or `ERROR: ...`).
 
 ## Why This Structure?
 
 River is intentionally split into layers:
 
-- **Input/Transport layer**: today it's a CLI REPL; later it can be TCP.
+- **Input/Transport layer**: TCP networking lives in `server/`.
 - **Parsing layer**: transforms raw text into structured commands.
+- **Command layer**: executes parsed commands and formats responses.
 - **Storage layer**: executes operations against an engine (currently a `HashMap`).
 - **Observability layer**: the store tracks lightweight metrics such as key count and operation count.
 
-This separation makes it easier to evolve the project without rewriting everything when networking is added.
+This separation makes it easier to evolve the project without rewriting everything when more protocols are added.

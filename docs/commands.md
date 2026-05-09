@@ -1,29 +1,29 @@
-# Commands and REPL
+# Commands
 
-River currently provides an interactive terminal REPL that reads commands from `stdin` and prints responses to `stdout`.
+River currently accepts line-based commands over TCP and writes line-based responses back to the socket.
 
 Source:
-- REPL + dispatch: `src/main.rs`
+- Command execution + response formatting: `src/commands/mod.rs`
 - Parsing: `src/commands/parser.rs`
 
-## REPL Behavior
+## TCP Behavior
 
-On startup, River prints a banner:
-
-```
-River DB started
-```
-
-Then it shows the prompt:
+On startup, River binds to:
 
 ```
-river >
+127.0.0.1:6379
 ```
 
-The loop continues until:
+Connect with:
+
+```bash
+nc 127.0.0.1 6379
+```
+
+Each line sent by a client is parsed as one command. The connection remains open until:
 
 - The user enters `EXIT` or `QUIT`, or
-- `stdin` reaches EOF (Ctrl-D)
+- The client disconnects
 
 ## Supported Commands
 
@@ -69,6 +69,21 @@ operations: 12
 
 The operations count includes `SET`, `GET`, and `DEL` calls. Calling `STATS` does not increment the operations counter.
 
+### `HEALTH` / `/HEALTH`
+
+Prints a lightweight system health summary.
+
+Response:
+
+```
+status: OK
+keys: 3
+operations: 12
+uptime: 0
+```
+
+`uptime` is currently a placeholder field.
+
 ### `EXIT` / `QUIT`
 
 Stops the program.
@@ -98,5 +113,6 @@ Examples:
 - `GET` (missing key) → `ERROR: Invalid syntax`
 - `PING now` (extra arguments) → `ERROR: Invalid syntax`
 - `STATS extra` → `ERROR: Invalid syntax`
+- `HEALTH extra` → `ERROR: Invalid syntax`
 
 The system is designed to never panic on user input.

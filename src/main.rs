@@ -1,70 +1,25 @@
 mod commands;
+mod server;
 mod store;
 
-use commands::parser::{Command, ParseError, parse_line};
-use std::io::{self, Write};
+use std::sync::Arc;
 use store::engine::RiverStore;
+use tokio::sync::Mutex;
 
-fn main() {
-    let mut store = RiverStore::new();
-    println!("River DB started");
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    let store = Arc::new(Mutex::new(RiverStore::new()));
+    let address =
+        std::env::var("RIVER_ADDR").unwrap_or_else(|_| server::tcp::DEFAULT_ADDRESS.to_string());
 
-    let stdin = io::stdin();
-    let mut line = String::new();
-
-    loop {
-        print!("river > ");
-        if io::stdout().flush().is_err() {
-            break;
+    match server::tcp::start_server(store, &address).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+            eprintln!(
+                "ERROR: {address} is already in use. Stop the process using that port or run with RIVER_ADDR=127.0.0.1:6380."
+            );
+            Err(error)
         }
-
-        line.clear();
-        match stdin.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(_) => break,
-        }
-
-        let command = match parse_line(&line) {
-            Ok(Some(command)) => command,
-            Ok(None) => continue,
-            Err(ParseError::UnknownCommand) => {
-                println!("ERROR: Unknown command");
-                continue;
-            }
-            Err(ParseError::InvalidSyntax) => {
-                println!("ERROR: Invalid syntax");
-                continue;
-            }
-        };
-
-        match command {
-            Command::Set { key, value } => {
-                store.set(key, value);
-                println!("OK");
-            }
-            Command::Get { key } => match store.get(&key) {
-                Some(value) => println!("{value}"),
-                None => println!("NULL"),
-            },
-            Command::Del { key } => {
-                store.delete(&key);
-                println!("OK");
-            }
-            Command::Ping => println!("PONG"),
-            Command::Stats => {
-                let stats = store.stats();
-                println!("keys: {}", stats.keys);
-                println!("operations: {}", stats.operations);
-            }
-            Command::Health => {
-                let health = store.health();
-                println!("status: {}", health.status);
-                println!("keys: {}", health.keys);
-                println!("operations: {}", health.operations);
-                println!("uptime: {}", health.uptime);
-            }
-            Command::Exit => break,
-        }
+        Err(error) => Err(error),
     }
 }
