@@ -17,6 +17,10 @@ Command Handler
   ↓
 Store
   ↓
+Persistence
+  ↓
+Disk
+  ↓
 Response
 ```
 
@@ -26,6 +30,7 @@ Mapping to code:
 - **Parser**: `src/commands/parser.rs`
 - **Command Handler**: `src/commands/mod.rs`
 - **Store**: `src/store/engine.rs`
+- **Persistence**: `src/persistence/storage.rs`
 - **Bootstrap**: `src/main.rs`
 
 ## Why Modular Design?
@@ -57,6 +62,13 @@ River keeps parsing and storage separate for three reasons:
 - Implement `set`, `get`, and `delete` operations
 - Track lightweight runtime metrics (`keys`, `operations`)
 - Expose read-only stats through `store.stats()`
+
+**Persistence responsibilities** (`persistence` module):
+
+- Serialize `RiverStore` with `bincode`
+- Write database snapshots to disk
+- Load database snapshots on startup
+- Keep file I/O separate from TCP networking
 
 ## TCP Networking
 
@@ -95,3 +107,19 @@ keys / operations response
 ```
 
 Metrics are intentionally owned by the store. The TCP layer does not calculate key counts or operation totals itself.
+
+## Persistence Path
+
+Persistence is triggered only by mutating commands:
+
+```
+SET / DEL
+  ↓
+RiverStore mutation
+  ↓
+persistence::storage::save_to_disk()
+  ↓
+river.db
+```
+
+Read-only commands (`GET`, `PING`, `STATS`, `HEALTH`) do not write to disk.

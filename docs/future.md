@@ -12,16 +12,18 @@ Potential protocol upgrades:
 - HTTP endpoints for status or diagnostics
 - Authentication handshake before command execution
 
-## Persistence (Snapshots / Logs)
+## Persistence Upgrades
 
-Persist data so River can restart without losing state.
+River currently persists a binary database snapshot with `serde` and `bincode`.
 
-Potential approaches:
+Future approaches:
 
-- **Snapshotting**: periodically serialize the entire `HashMap` and write it to disk.
 - **Append-only log (AOF)**: record commands so the store can be rebuilt on startup.
+- **Background snapshots**: write data without blocking command execution.
+- **Crash recovery**: add checksums, manifests, or durable rename strategies.
+- **Compression/encryption**: reduce disk usage or protect stored data.
 
-The crate dependencies already include `serde` and `bincode`, which can be used later for serialization, but persistence is not implemented yet.
+The current implementation favors clarity and correctness over advanced write performance.
 
 ## INFO Command
 

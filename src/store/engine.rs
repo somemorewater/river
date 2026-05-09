@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RiverStore {
     data: HashMap<String, String>,
+    #[serde(skip)]
     operations: usize,
 }
 

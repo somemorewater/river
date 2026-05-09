@@ -10,6 +10,7 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 - In-memory key-value store (`HashMap<String, String>`)
 - Tokio-based TCP server on `127.0.0.1:6379`
 - Shared in-memory state across multiple clients
+- Disk persistence with `serde` + `bincode`
 - Supported commands: `SET`, `GET`, `DEL`, `PING`, `STATS`, `HEALTH`, `EXIT`, `QUIT`
 - Built-in runtime stats for keys and operations
 - Rust-based performance and safety
@@ -29,6 +30,10 @@ Input Cleaning + Parsing
 Command Execution
   ↓
 RiverStore (HashMap)
+  ↓
+Persistence Layer
+  ↓
+Disk (`river.db`)
   ↓
 Response (socket)
 ```
@@ -74,6 +79,12 @@ If port `6379` is already in use, run on another local port:
 
 ```bash
 RIVER_ADDR=127.0.0.1:6380 cargo run
+```
+
+River persists data to `river.db` by default. To use another file:
+
+```bash
+RIVER_DB_PATH=/tmp/river-dev.db cargo run
 ```
 
 Connect with `nc` or `telnet` from another terminal:
@@ -133,11 +144,15 @@ src/
   server/
     mod.rs
     tcp.rs           # Tokio TCP listener + client handling
+  persistence/
+    mod.rs
+    storage.rs       # bincode save/load helpers
 docs/
   overview.md
   architecture.md
   commands.md
   parser.md
+  persistence.md
   server.md
   store.md
   future.md
@@ -150,7 +165,7 @@ Planned next steps:
 - TCP server: accept client connections and reuse the same parser + command layer
 - INFO command: richer runtime introspection (memory hints, persistence state)
 - RESP protocol support
-- Persistence: write snapshots / logs (planned via `serde` + `bincode`)
+- Persistence upgrades: append-only logs, snapshots, crash recovery
 - Benchmarking: measure throughput/latency (Criterion)
 - Concurrency improvements: shared state, locking strategy, and command handling under load
 

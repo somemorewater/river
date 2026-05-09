@@ -86,6 +86,12 @@ Because the store is in-memory:
 
 In this stage, River does not attempt to control allocation strategy; correctness and clarity come first.
 
+## Serialization Behavior
+
+`RiverStore` derives `Serialize` and `Deserialize` so the persistence layer can write and restore database state.
+
+Only durable database data is persisted. Runtime metrics such as the operations counter reset when the process restarts, preserving the meaning of "operations since startup."
+
 ## Observability
 
 The store owns its own metrics so higher layers do not need to duplicate storage knowledge.
