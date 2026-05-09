@@ -5,6 +5,7 @@ pub enum Command {
     Del { key: String },
     Ping,
     Stats,
+    Health,
     Exit,
 }
 
@@ -64,6 +65,12 @@ pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
             }
             Ok(Some(Command::Stats))
         }
+        "HEALTH" | "/HEALTH" => {
+            if parts.len() != 1 {
+                return Err(ParseError::InvalidSyntax);
+            }
+            Ok(Some(Command::Health))
+        }
         "EXIT" | "QUIT" => {
             if parts.len() != 1 {
                 return Err(ParseError::InvalidSyntax);
@@ -87,6 +94,17 @@ mod tests {
     #[test]
     fn rejects_stats_with_arguments() {
         assert_eq!(parse_line("STATS now"), Err(ParseError::InvalidSyntax));
+    }
+
+    #[test]
+    fn parses_health_commands() {
+        assert_eq!(parse_line("HEALTH"), Ok(Some(Command::Health)));
+        assert_eq!(parse_line("/health"), Ok(Some(Command::Health)));
+    }
+
+    #[test]
+    fn rejects_health_with_arguments() {
+        assert_eq!(parse_line("HEALTH now"), Err(ParseError::InvalidSyntax));
     }
 
     #[test]

@@ -10,6 +10,13 @@ pub struct StoreStats {
     pub operations: usize,
 }
 
+pub struct StoreHealth {
+    pub status: &'static str,
+    pub keys: usize,
+    pub operations: usize,
+    pub uptime: usize,
+}
+
 impl RiverStore {
     pub fn new() -> Self {
         Self {
@@ -37,6 +44,15 @@ impl RiverStore {
         StoreStats {
             keys: self.data.len(),
             operations: self.operations,
+        }
+    }
+
+    pub fn health(&self) -> StoreHealth {
+        StoreHealth {
+            status: "OK",
+            keys: self.data.len(),
+            operations: self.operations,
+            uptime: 0,
         }
     }
 }

@@ -57,6 +57,13 @@ fn main() {
                 println!("keys: {}", stats.keys);
                 println!("operations: {}", stats.operations);
             }
+            Command::Health => {
+                let health = store.health();
+                println!("status: {}", health.status);
+                println!("keys: {}", health.keys);
+                println!("operations: {}", health.operations);
+                println!("uptime: {}", health.uptime);
+            }
             Command::Exit => break,
         }
     }
