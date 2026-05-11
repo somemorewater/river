@@ -1,5 +1,6 @@
 mod commands;
 mod persistence;
+mod protocol;
 mod server;
 mod store;
 

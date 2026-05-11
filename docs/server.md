@@ -7,8 +7,9 @@ River's networking layer lives in `src/server/tcp.rs`.
 - Bind a TCP listener to `127.0.0.1:6379`
 - Accept client connections continuously
 - Spawn one Tokio task per client
-- Read socket input line by line
-- Send command responses back over the socket
+- Read socket bytes into a buffer
+- Pass bytes to the RESP protocol decoder
+- Send RESP-encoded responses back over the socket
 - Handle disconnects and socket errors without panicking
 
 ## Shared State
@@ -26,16 +27,20 @@ This keeps the first networked implementation simple and correct. The mutex ensu
 ```
 client socket
   ↓
-BufReader::lines()
+byte buffer
   ↓
-commands::handle_input()
+protocol::resp::decode()
+  ↓
+commands::handle_parts()
   ↓
 RiverStore
   ↓
-write response
+protocol::resp::encode()
+  ↓
+write response bytes
 ```
 
-The TCP layer does not parse command syntax itself. It delegates parsing, validation, execution, and response formatting to the `commands` module.
+The TCP layer does not parse RESP syntax itself. It delegates framing to the `protocol` module and command interpretation to the `commands` module.
 
 ## Manual Testing
 
@@ -57,12 +62,16 @@ Connect with:
 nc 127.0.0.1 6379
 ```
 
-Then type commands:
+Then send RESP frames:
 
 ```text
+*1
+$4
 PING
-SET name Water
-GET name
-STATS
-HEALTH
+```
+
+For a shell-friendly one-command check:
+
+```bash
+printf '*1\r\n$4\r\nPING\r\n' | nc 127.0.0.1 6379
 ```

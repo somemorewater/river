@@ -9,19 +9,16 @@ Source:
 
 The parser’s job is to convert raw user input into a structured representation:
 
-- Input: `&str` (a line from a TCP client or another future transport)
+- Input: command parts from the protocol layer, or a raw string for tests/local tooling
 - Output: `Option<Command>` or a `ParseError`
 
 This makes the storage engine independent of any particular input transport.
 
 ## Parsing Steps
 
-1. **Trim**: remove leading/trailing whitespace.
-2. **Empty handling**: if the trimmed input is empty, return `Ok(None)` so the caller can silently ignore it.
-3. **Tokenize**: split the line by whitespace using `split_whitespace()`.
-   - This automatically normalizes multiple spaces/tabs into clean separation.
-4. **Command match**: uppercase the first token and match it against supported commands.
-5. **Argument validation**: enforce exact argument counts:
+1. **Empty handling**: if the command parts are empty, return `Ok(None)`.
+2. **Command match**: uppercase the first part and match it against supported commands.
+3. **Argument validation**: enforce exact argument counts:
    - `SET` requires 2 args (`key value`)
    - `GET` requires 1 arg (`key`)
    - `DEL` requires 1 arg (`key`)
@@ -53,14 +50,16 @@ The command handler decides how to print these errors.
 
 ## Transport Reuse
 
-Because the parser operates on `&str` and returns a structured `Command`, it is independent of TCP. Future transports can reuse it.
+Because the parser can operate on already-tokenized command parts, it is independent of TCP and whitespace. Future transports can reuse it.
 
 Current TCP flow:
 
 ```
-read line from socket
+read RESP frame from socket
   ↓
-parse_line(&line)
+frame_to_parts(frame)
+  ↓
+parse_parts(&parts)
   ↓
 dispatch Command to RiverStore
   ↓

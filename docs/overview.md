@@ -1,7 +1,7 @@
 # River Overview
 
 River is a small, experimental in-memory key-value data store written in Rust.
-The current implementation focuses on clarity and modularity: a Tokio TCP server reads client input, a parser turns input into structured commands, and a store engine executes those commands against an in-memory `HashMap`.
+The current implementation focuses on clarity and modularity: a Tokio TCP server reads client bytes, a RESP-inspired protocol layer decodes frames, a parser turns command parts into structured commands, and a store engine executes those commands against an in-memory `HashMap`.
 
 ## Goals
 
@@ -11,7 +11,7 @@ The current implementation focuses on clarity and modularity: a Tokio TCP server
 
 ## Non-Goals (for now)
 
-- No persistence (snapshots / AOF) yet
+- No append-only log or advanced crash recovery yet
 - No advanced concurrency optimizations yet
 - No advanced query language; only a small command set
 
@@ -20,33 +20,43 @@ The current implementation focuses on clarity and modularity: a Tokio TCP server
 ```
 TCP client
   ↓
-server::tcp (line-based networking)
+server::tcp (byte networking)
   ↓
-commands::parser (clean + parse)
+protocol::resp (decode frame)
   ↓
-commands::handle_input (execute + format)
+commands::parser (parse command parts)
+  ↓
+commands::handle_parts (execute + format)
   ↓
 store::engine::RiverStore (HashMap)
   ↓
-socket response
+persistence::storage (save on SET/DEL)
+  ↓
+protocol::resp (encode response)
+  ↓
+socket response bytes
 ```
 
 ## Data Flow
 
 1. The TCP server accepts a client connection on `127.0.0.1:6379`.
 2. Each connected client is handled in its own Tokio task.
-3. A socket line is cleaned and parsed into a `Command` enum (or rejected with an error).
-4. The command module executes the command against shared `RiverStore` state.
-5. A response is written back to the client in a predictable format (`OK`, `NULL`, `PONG`, health/stats output, or `ERROR: ...`).
+3. Socket bytes are decoded into RESP-style frames.
+4. Command arrays are parsed into a `Command` enum (or rejected with an error).
+5. The command module executes the command against shared `RiverStore` state.
+6. Mutating commands save the store to disk.
+7. A response is encoded as RESP and written back to the client.
 
 ## Why This Structure?
 
 River is intentionally split into layers:
 
 - **Input/Transport layer**: TCP networking lives in `server/`.
-- **Parsing layer**: transforms raw text into structured commands.
+- **Protocol layer**: decodes and encodes RESP-style frames.
+- **Parsing layer**: transforms command parts into structured commands.
 - **Command layer**: executes parsed commands and formats responses.
 - **Storage layer**: executes operations against an engine (currently a `HashMap`).
+- **Persistence layer**: saves and restores database snapshots.
 - **Observability layer**: the store tracks lightweight metrics such as key count and operation count.
 
 This separation makes it easier to evolve the project without rewriting everything when more protocols are added.

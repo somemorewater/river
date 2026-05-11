@@ -4,11 +4,12 @@ River is intentionally built in stages. This document outlines likely next steps
 
 ## Protocols
 
-River now has a line-based TCP server. Future protocol work can build on that networking layer.
+River now has a RESP-inspired TCP protocol. Future protocol work can build on that framing layer.
 
 Potential protocol upgrades:
 
-- RESP support for Redis-like clients
+- Pipelining
+- Richer Redis client compatibility
 - HTTP endpoints for status or diagnostics
 - Authentication handshake before command execution
 

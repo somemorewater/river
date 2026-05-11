@@ -11,22 +11,25 @@ TCP Client
   ↓
 TCP Layer
   ↓
-Parser
+RESP Protocol Parser
+  ↓
+Command Parser
   ↓
 Command Handler
   ↓
 Store
   ↓
-Persistence
+Persistence (SET/DEL only)
   ↓
-Disk
+RESP Encoder
   ↓
-Response
+Response Bytes
 ```
 
 Mapping to code:
 
 - **TCP Layer**: `src/server/tcp.rs`
+- **Protocol Layer**: `src/protocol/resp.rs`, `src/protocol/frame.rs`
 - **Parser**: `src/commands/parser.rs`
 - **Command Handler**: `src/commands/mod.rs`
 - **Store**: `src/store/engine.rs`
@@ -39,14 +42,20 @@ River keeps parsing and storage separate for three reasons:
 
 1. **Correctness and safety**: parsing and validation are centralized; the store never needs to interpret raw user input.
 2. **Testability**: the parser and store can be tested independently.
-3. **Future transport support**: HTTP, RESP, or a CLI can reuse the same parser and dispatch logic.
+3. **Future transport support**: HTTP, a CLI, or custom clients can reuse the same parser and dispatch logic.
 
 ## Parser vs. Storage Responsibilities
 
+**Protocol responsibilities** (`protocol` module):
+
+- Decode RESP-style frames from TCP bytes
+- Encode server responses as RESP-style frames
+- Represent protocol data with `Frame`
+- Detect malformed or incomplete protocol messages
+
 **Parser responsibilities** (`commands` module):
 
-- Trim leading/trailing whitespace
-- Treat any run of whitespace as a separator (normalization)
+- Accept command parts from the protocol layer
 - Validate command names and argument counts
 - Return a structured `Command` value or a specific error
 
@@ -77,15 +86,19 @@ TCP is isolated in `src/server/tcp.rs`:
 ```
 TCP connection
   ↓
-read line / frame
+read bytes
   ↓
-commands::parser::parse_line
+protocol::resp::decode
   ↓
-commands::handle_input
+commands::parser::parse_parts
+  ↓
+commands::handle_parts
   ↓
 RiverStore
   ↓
-write response
+protocol::resp::encode
+  ↓
+write bytes
 ```
 
 Each client connection runs in its own Tokio task. Shared database state is protected with `Arc<tokio::sync::Mutex<RiverStore>>`.
@@ -95,7 +108,7 @@ Each client connection runs in its own Tokio task. Shared database state is prot
 River’s stats flow follows the same separation:
 
 ```
-TCP Input (`STATS`)
+RESP Array (`STATS`)
   ↓
 Parser (`Command::Stats`)
   ↓

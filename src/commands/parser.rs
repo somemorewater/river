@@ -15,13 +15,7 @@ pub enum ParseError {
     InvalidSyntax,
 }
 
-pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+pub fn parse_parts(parts: &[String]) -> Result<Option<Command>, ParseError> {
     if parts.is_empty() {
         return Ok(None);
     }
@@ -33,8 +27,8 @@ pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
                 return Err(ParseError::InvalidSyntax);
             }
             Ok(Some(Command::Set {
-                key: parts[1].to_string(),
-                value: parts[2].to_string(),
+                key: parts[1].clone(),
+                value: parts[2].clone(),
             }))
         }
         "GET" => {
@@ -42,7 +36,7 @@ pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
                 return Err(ParseError::InvalidSyntax);
             }
             Ok(Some(Command::Get {
-                key: parts[1].to_string(),
+                key: parts[1].clone(),
             }))
         }
         "DEL" => {
@@ -50,7 +44,7 @@ pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
                 return Err(ParseError::InvalidSyntax);
             }
             Ok(Some(Command::Del {
-                key: parts[1].to_string(),
+                key: parts[1].clone(),
             }))
         }
         "PING" => {
@@ -83,42 +77,64 @@ pub fn parse_line(input: &str) -> Result<Option<Command>, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Command, ParseError, parse_line};
+    use super::{Command, ParseError, parse_parts};
 
     #[test]
     fn parses_stats_commands() {
-        assert_eq!(parse_line("STATS"), Ok(Some(Command::Stats)));
-        assert_eq!(parse_line("/stats"), Ok(Some(Command::Stats)));
+        assert_eq!(
+            parse_parts(&["STATS".to_string()]),
+            Ok(Some(Command::Stats))
+        );
+        assert_eq!(
+            parse_parts(&["/stats".to_string()]),
+            Ok(Some(Command::Stats))
+        );
     }
 
     #[test]
     fn rejects_stats_with_arguments() {
-        assert_eq!(parse_line("STATS now"), Err(ParseError::InvalidSyntax));
+        assert_eq!(
+            parse_parts(&["STATS".to_string(), "now".to_string()]),
+            Err(ParseError::InvalidSyntax)
+        );
     }
 
     #[test]
     fn parses_health_commands() {
-        assert_eq!(parse_line("HEALTH"), Ok(Some(Command::Health)));
-        assert_eq!(parse_line("/health"), Ok(Some(Command::Health)));
+        assert_eq!(
+            parse_parts(&["HEALTH".to_string()]),
+            Ok(Some(Command::Health))
+        );
+        assert_eq!(
+            parse_parts(&["/health".to_string()]),
+            Ok(Some(Command::Health))
+        );
     }
 
     #[test]
     fn rejects_health_with_arguments() {
-        assert_eq!(parse_line("HEALTH now"), Err(ParseError::InvalidSyntax));
+        assert_eq!(
+            parse_parts(&["HEALTH".to_string(), "now".to_string()]),
+            Err(ParseError::InvalidSyntax)
+        );
     }
 
     #[test]
     fn ignores_empty_input() {
-        assert_eq!(parse_line("   "), Ok(None));
+        assert_eq!(parse_parts(&[]), Ok(None));
     }
 
     #[test]
-    fn normalizes_whitespace() {
+    fn parses_pre_tokenized_parts_without_splitting_values() {
         assert_eq!(
-            parse_line("  SET   name   Water  "),
+            parse_parts(&[
+                "SET".to_string(),
+                "name".to_string(),
+                "Water River".to_string()
+            ]),
             Ok(Some(Command::Set {
                 key: "name".to_string(),
-                value: "Water".to_string()
+                value: "Water River".to_string()
             }))
         );
     }

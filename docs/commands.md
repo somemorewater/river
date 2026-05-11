@@ -1,6 +1,6 @@
 # Commands
 
-River currently accepts line-based commands over TCP and writes line-based responses back to the socket.
+River currently accepts RESP-style arrays over TCP and writes RESP-style responses back to the socket.
 
 Source:
 - Command execution + response formatting: `src/commands/mod.rs`
@@ -20,7 +20,7 @@ Connect with:
 nc 127.0.0.1 6379
 ```
 
-Each line sent by a client is parsed as one command. The connection remains open until:
+Each RESP array sent by a client is parsed as one command. The connection remains open until:
 
 - The user enters `EXIT` or `QUIT`, or
 - The client disconnects
@@ -32,29 +32,29 @@ Each line sent by a client is parsed as one command. The connection remains open
 Stores `value` under `key`.
 
 Response:
-- `OK`
+- `+OK`
 
 ### `GET key`
 
 Fetches the value for `key`.
 
 Response:
-- If present: prints the value
-- If missing: prints `NULL`
+- If present: bulk string, e.g. `$5\r\nWater\r\n`
+- If missing: `$-1`
 
 ### `DEL key`
 
 Deletes `key` if it exists.
 
 Response:
-- `OK`
+- `+OK`
 
 ### `PING`
 
 Health check / connectivity check (useful later for TCP).
 
 Response:
-- `PONG`
+- `+PONG`
 
 ### `STATS` / `/STATS`
 
@@ -62,7 +62,8 @@ Prints runtime store metrics.
 
 Response:
 
-```
+```text
+$23
 keys: 3
 operations: 12
 ```
@@ -75,7 +76,8 @@ Prints a lightweight system health summary.
 
 Response:
 
-```
+```text
+$45
 status: OK
 keys: 3
 operations: 12
@@ -88,15 +90,19 @@ uptime: 0
 
 Stops the program.
 
-## Input Cleaning Rules
+## RESP Command Shape
 
-Before parsing, River normalizes input:
+Commands are encoded as arrays of bulk strings:
 
-- Trims leading and trailing whitespace
-- Treats runs of whitespace as separators (e.g. multiple spaces or tabs behave the same)
-- Ignores empty / whitespace-only lines (no output and no error)
+```text
+*2
+$3
+GET
+$4
+name
+```
 
-This makes command handling predictable and avoids subtle parsing bugs.
+The protocol layer turns this into command parts: `["GET", "name"]`.
 
 ## Error Handling Strategy (Strict)
 
@@ -104,8 +110,8 @@ The parser returns one of:
 
 - `Ok(None)` for empty input (silently ignored)
 - `Ok(Some(Command))` for valid commands
-- `Err(UnknownCommand)` → printed as `ERROR: Unknown command`
-- `Err(InvalidSyntax)` → printed as `ERROR: Invalid syntax`
+- `Err(UnknownCommand)` → encoded as `-ERROR unknown command`
+- `Err(InvalidSyntax)` → encoded as `-ERROR invalid syntax`
 
 Examples:
 

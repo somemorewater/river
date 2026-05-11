@@ -1,8 +1,10 @@
-use crate::commands::{CommandResponse, handle_input_with_persistence};
+use crate::commands::{CommandResponse, handle_parts};
+use crate::protocol::frame::Frame;
+use crate::protocol::resp::{self, DecodeResult};
 use crate::store::engine::RiverStore;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 
@@ -37,22 +39,68 @@ async fn handle_client(
     store: Arc<Mutex<RiverStore>>,
     db_path: PathBuf,
 ) -> std::io::Result<()> {
-    let (reader, mut writer) = stream.into_split();
-    let mut lines = BufReader::new(reader).lines();
+    let (mut reader, mut writer) = stream.into_split();
+    let mut buffer = Vec::new();
+    let mut read_buffer = [0; 4096];
 
-    while let Some(line) = lines.next_line().await? {
-        let response = {
-            let mut store = store.lock().await;
-            handle_input_with_persistence(&line, &mut store, Some(&db_path))
-        };
-
-        match response {
-            CommandResponse::Message(message) => {
-                writer.write_all(message.as_bytes()).await?;
-                writer.write_all(b"\n").await?;
+    loop {
+        let read = reader.read(&mut read_buffer).await?;
+        if read == 0 {
+            if !buffer.is_empty() {
+                let frame = Frame::Error("ERROR incomplete frame".to_string());
+                writer.write_all(&resp::encode(&frame)).await?;
             }
-            CommandResponse::Empty => {}
-            CommandResponse::Close => break,
+            break;
+        }
+
+        buffer.extend_from_slice(&read_buffer[..read]);
+
+        loop {
+            let decoded = match resp::decode(&buffer) {
+                Ok(DecodeResult::Complete(frame, consumed)) => {
+                    buffer.drain(..consumed);
+                    frame
+                }
+                Ok(DecodeResult::Incomplete) => break,
+                Err(error) => {
+                    let frame = Frame::Error(format!("ERROR {}", error.message()));
+                    writer.write_all(&resp::encode(&frame)).await?;
+                    buffer.clear();
+                    break;
+                }
+            };
+
+            let response = match resp::frame_to_parts(decoded) {
+                Ok(Some(parts)) => {
+                    let mut store = store.lock().await;
+                    handle_parts(&parts, &mut store, Some(&db_path))
+                }
+                Ok(None) => CommandResponse::Empty,
+                Err(error) => CommandResponse::Error(format!("ERROR {}", error.message())),
+            };
+
+            match response {
+                CommandResponse::Simple(message) => {
+                    writer
+                        .write_all(&resp::encode(&Frame::Simple(message)))
+                        .await?;
+                }
+                CommandResponse::Bulk(message) => {
+                    writer
+                        .write_all(&resp::encode(&Frame::Bulk(message)))
+                        .await?;
+                }
+                CommandResponse::Null => {
+                    writer.write_all(&resp::encode(&Frame::Null)).await?;
+                }
+                CommandResponse::Error(message) => {
+                    writer
+                        .write_all(&resp::encode(&Frame::Error(message)))
+                        .await?;
+                }
+                CommandResponse::Empty => {}
+                CommandResponse::Close => return Ok(()),
+            }
         }
     }
 

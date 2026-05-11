@@ -2,74 +2,82 @@ pub mod parser;
 
 use crate::persistence::storage;
 use crate::store::engine::RiverStore;
-use parser::{Command, ParseError, parse_line};
+use parser::{Command, ParseError, parse_parts};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandResponse {
-    Message(String),
+    Simple(String),
+    Bulk(String),
+    Null,
+    Error(String),
     Empty,
     Close,
 }
 
-pub fn handle_input(input: &str, store: &mut RiverStore) -> CommandResponse {
-    handle_input_with_persistence(input, store, None::<&Path>)
-}
-
-pub fn handle_input_with_persistence(
-    input: &str,
+pub fn handle_parts(
+    parts: &[String],
     store: &mut RiverStore,
     db_path: Option<impl AsRef<Path>>,
 ) -> CommandResponse {
-    let command = match parse_line(input) {
+    let command = match parse_parts(parts) {
         Ok(Some(command)) => command,
         Ok(None) => return CommandResponse::Empty,
         Err(ParseError::UnknownCommand) => {
-            return CommandResponse::Message("ERROR: Unknown command".to_string());
+            return CommandResponse::Error("ERROR unknown command".to_string());
         }
         Err(ParseError::InvalidSyntax) => {
-            return CommandResponse::Message("ERROR: Invalid syntax".to_string());
+            return CommandResponse::Error("ERROR invalid syntax".to_string());
         }
     };
 
+    execute_command(command, store, db_path)
+}
+
+fn execute_command(
+    command: Command,
+    store: &mut RiverStore,
+    db_path: Option<impl AsRef<Path>>,
+) -> CommandResponse {
     match command {
         Command::Set { key, value } => {
             store.set(key, value);
             if let Some(path) = db_path {
                 if let Err(error) = storage::save_to_disk(store, path) {
                     eprintln!("[ERROR] Failed to persist database: {error}");
-                    return CommandResponse::Message("ERROR: Persistence failed".to_string());
+                    return CommandResponse::Error("ERROR persistence failed".to_string());
                 }
             }
-            CommandResponse::Message("OK".to_string())
+            CommandResponse::Simple("OK".to_string())
         }
         Command::Get { key } => {
-            let value = store
-                .get(&key)
-                .map_or_else(|| "NULL".to_string(), ToString::to_string);
-            CommandResponse::Message(value)
+            let Some(value) = store.get(&key) else {
+                return CommandResponse::Null;
+            };
+
+            CommandResponse::Bulk(value.to_string())
         }
         Command::Del { key } => {
             store.delete(&key);
             if let Some(path) = db_path {
                 if let Err(error) = storage::save_to_disk(store, path) {
                     eprintln!("[ERROR] Failed to persist database: {error}");
-                    return CommandResponse::Message("ERROR: Persistence failed".to_string());
+                    return CommandResponse::Error("ERROR persistence failed".to_string());
                 }
             }
-            CommandResponse::Message("OK".to_string())
+            CommandResponse::Simple("OK".to_string())
         }
-        Command::Ping => CommandResponse::Message("PONG".to_string()),
+        Command::Ping => CommandResponse::Simple("PONG".to_string()),
         Command::Stats => {
             let stats = store.stats();
-            CommandResponse::Message(format!(
+            CommandResponse::Bulk(format!(
                 "keys: {}\noperations: {}",
                 stats.keys, stats.operations
             ))
         }
         Command::Health => {
             let health = store.health();
-            CommandResponse::Message(format!(
+            CommandResponse::Bulk(format!(
                 "status: {}\nkeys: {}\noperations: {}\nuptime: {}",
                 health.status, health.keys, health.operations, health.uptime
             ))
@@ -80,7 +88,7 @@ pub fn handle_input_with_persistence(
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandResponse, handle_input, handle_input_with_persistence};
+    use super::{CommandResponse, handle_parts};
     use crate::persistence::storage::load_from_disk;
     use crate::store::engine::RiverStore;
     use std::path::PathBuf;
@@ -93,8 +101,8 @@ mod tests {
     fn formats_stats_response() {
         let mut store = RiverStore::new();
         assert_eq!(
-            handle_input("STATS", &mut store),
-            CommandResponse::Message("keys: 0\noperations: 0".to_string())
+            handle_parts(&["STATS".to_string()], &mut store, None::<&std::path::Path>),
+            CommandResponse::Bulk("keys: 0\noperations: 0".to_string())
         );
     }
 
@@ -102,8 +110,12 @@ mod tests {
     fn formats_health_response() {
         let mut store = RiverStore::new();
         assert_eq!(
-            handle_input("HEALTH", &mut store),
-            CommandResponse::Message("status: OK\nkeys: 0\noperations: 0\nuptime: 0".to_string())
+            handle_parts(
+                &["HEALTH".to_string()],
+                &mut store,
+                None::<&std::path::Path>
+            ),
+            CommandResponse::Bulk("status: OK\nkeys: 0\noperations: 0\nuptime: 0".to_string())
         );
     }
 
@@ -111,12 +123,42 @@ mod tests {
     fn maps_parse_errors_to_messages() {
         let mut store = RiverStore::new();
         assert_eq!(
-            handle_input("HEALTH now", &mut store),
-            CommandResponse::Message("ERROR: Invalid syntax".to_string())
+            handle_parts(
+                &["HEALTH".to_string(), "now".to_string()],
+                &mut store,
+                None::<&std::path::Path>
+            ),
+            CommandResponse::Error("ERROR invalid syntax".to_string())
         );
         assert_eq!(
-            handle_input("NOPE", &mut store),
-            CommandResponse::Message("ERROR: Unknown command".to_string())
+            handle_parts(&["NOPE".to_string()], &mut store, None::<&std::path::Path>),
+            CommandResponse::Error("ERROR unknown command".to_string())
+        );
+    }
+
+    #[test]
+    fn handles_pre_tokenized_values_with_spaces() {
+        let mut store = RiverStore::new();
+        assert_eq!(
+            handle_parts(
+                &[
+                    "SET".to_string(),
+                    "name".to_string(),
+                    "Water River".to_string()
+                ],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Simple("OK".to_string())
+        );
+
+        assert_eq!(
+            handle_parts(
+                &["GET".to_string(), "name".to_string()],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Bulk("Water River".to_string())
         );
     }
 
@@ -127,8 +169,12 @@ mod tests {
 
         let mut store = RiverStore::new();
         assert_eq!(
-            handle_input_with_persistence("SET name Water", &mut store, Some(&path)),
-            CommandResponse::Message("OK".to_string())
+            handle_parts(
+                &["SET".to_string(), "name".to_string(), "Water".to_string()],
+                &mut store,
+                Some(&path)
+            ),
+            CommandResponse::Simple("OK".to_string())
         );
 
         let mut loaded = load_from_disk(&path)
