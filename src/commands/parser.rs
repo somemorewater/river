@@ -1,8 +1,24 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    Set { key: String, value: String },
-    Get { key: String },
-    Del { key: String },
+    Set {
+        key: String,
+        value: String,
+    },
+    SetEx {
+        key: String,
+        seconds: u64,
+        value: String,
+    },
+    Get {
+        key: String,
+    },
+    Del {
+        key: String,
+    },
+    Expire {
+        key: String,
+        seconds: u64,
+    },
     Ping,
     Stats,
     Health,
@@ -31,12 +47,31 @@ pub fn parse_parts(parts: &[String]) -> Result<Option<Command>, ParseError> {
                 value: parts[2].clone(),
             }))
         }
+        "SETEX" => {
+            if parts.len() != 4 {
+                return Err(ParseError::InvalidSyntax);
+            }
+            Ok(Some(Command::SetEx {
+                key: parts[1].clone(),
+                seconds: parse_seconds(&parts[2])?,
+                value: parts[3].clone(),
+            }))
+        }
         "GET" => {
             if parts.len() != 2 {
                 return Err(ParseError::InvalidSyntax);
             }
             Ok(Some(Command::Get {
                 key: parts[1].clone(),
+            }))
+        }
+        "EXPIRE" => {
+            if parts.len() != 3 {
+                return Err(ParseError::InvalidSyntax);
+            }
+            Ok(Some(Command::Expire {
+                key: parts[1].clone(),
+                seconds: parse_seconds(&parts[2])?,
             }))
         }
         "DEL" => {
@@ -73,6 +108,10 @@ pub fn parse_parts(parts: &[String]) -> Result<Option<Command>, ParseError> {
         }
         _ => Err(ParseError::UnknownCommand),
     }
+}
+
+fn parse_seconds(input: &str) -> Result<u64, ParseError> {
+    input.parse::<u64>().map_err(|_| ParseError::InvalidSyntax)
 }
 
 #[cfg(test)]
@@ -136,6 +175,59 @@ mod tests {
                 key: "name".to_string(),
                 value: "Water River".to_string()
             }))
+        );
+    }
+
+    #[test]
+    fn parses_expire_command() {
+        assert_eq!(
+            parse_parts(&[
+                "EXPIRE".to_string(),
+                "session".to_string(),
+                "60".to_string()
+            ]),
+            Ok(Some(Command::Expire {
+                key: "session".to_string(),
+                seconds: 60
+            }))
+        );
+    }
+
+    #[test]
+    fn parses_setex_command() {
+        assert_eq!(
+            parse_parts(&[
+                "SETEX".to_string(),
+                "session".to_string(),
+                "60".to_string(),
+                "abc".to_string()
+            ]),
+            Ok(Some(Command::SetEx {
+                key: "session".to_string(),
+                seconds: 60,
+                value: "abc".to_string()
+            }))
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_ttl_values() {
+        assert_eq!(
+            parse_parts(&[
+                "EXPIRE".to_string(),
+                "session".to_string(),
+                "-1".to_string()
+            ]),
+            Err(ParseError::InvalidSyntax)
+        );
+        assert_eq!(
+            parse_parts(&[
+                "SETEX".to_string(),
+                "session".to_string(),
+                "soon".to_string(),
+                "abc".to_string()
+            ]),
+            Err(ParseError::InvalidSyntax)
         );
     }
 }

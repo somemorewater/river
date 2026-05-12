@@ -10,6 +10,7 @@ Source:
 - Serialize the current `RiverStore`
 - Write binary database data to disk
 - Load database state on startup
+- Preserve key expiration metadata across restarts
 - Treat missing database files as an empty store
 - Report read/write/serialization errors without crashing the server
 
@@ -32,7 +33,10 @@ RIVER_DB_PATH=/tmp/river-dev.db cargo run
 River saves automatically after mutating commands:
 
 - `SET`
+- `SETEX`
 - `DEL`
+- `EXPIRE` when the key exists
+- Background cleanup when expired keys are removed
 
 Read-only commands do not trigger disk writes:
 
@@ -47,8 +51,9 @@ On startup:
 
 1. If the database file exists, River attempts to deserialize it.
 2. If loading succeeds, the store is restored.
-3. If the file is missing, River starts empty.
-4. If the file is corrupted or unreadable, River logs the error and starts empty.
+3. Already-expired keys are removed before the server starts accepting clients.
+4. If the file is missing, River starts empty.
+5. If the file is corrupted or unreadable, River logs the error and starts empty.
 
 ## Current Tradeoff
 

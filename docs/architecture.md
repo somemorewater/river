@@ -18,8 +18,11 @@ Command Parser
 Command Handler
   ↓
 Store
+  ├── Data Store
+  ├── Expiration Store
+  └── Cleanup System
   ↓
-Persistence (SET/DEL only)
+Persistence (mutations + cleanup)
   ↓
 RESP Encoder
   ↓
@@ -68,7 +71,9 @@ River keeps parsing and storage separate for three reasons:
 **Storage responsibilities** (`store` module):
 
 - Manage in-memory state (`HashMap<String, String>`)
-- Implement `set`, `get`, and `delete` operations
+- Implement `set`, `set_with_expiration`, `get`, `delete`, and `expire` operations
+- Track key expiration metadata separately from stored values
+- Remove expired keys during reads and background cleanup
 - Track lightweight runtime metrics (`keys`, `operations`)
 - Expose read-only stats through `store.stats()`
 
@@ -126,7 +131,7 @@ Metrics are intentionally owned by the store. The TCP layer does not calculate k
 Persistence is triggered only by mutating commands:
 
 ```
-SET / DEL
+SET / SETEX / DEL / EXPIRE
   ↓
 RiverStore mutation
   ↓
@@ -135,4 +140,4 @@ persistence::storage::save_to_disk()
 river.db
 ```
 
-Read-only commands (`GET`, `PING`, `STATS`, `HEALTH`) do not write to disk.
+Background expiration cleanup also saves when it removes stale keys. Read-only commands (`GET`, `PING`, `STATS`, `HEALTH`) do not normally write to disk.

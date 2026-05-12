@@ -26,6 +26,18 @@ Future approaches:
 
 The current implementation favors clarity and correctness over advanced write performance.
 
+## Expiration Upgrades
+
+River now supports key TTLs with passive reads and a lightweight active cleanup worker.
+
+Future expiration work can explore:
+
+- LRU/LFU eviction
+- Memory pressure cleanup
+- More efficient expiration scheduling
+- Per-key TTL inspection commands
+- Distributed expiration behavior
+
 ## INFO Command
 
 `STATS` currently exposes key count and operation count. A future `INFO` command can build on the same store-owned metrics model.

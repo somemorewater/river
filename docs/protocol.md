@@ -11,6 +11,7 @@ Source:
 River currently supports:
 
 - `Frame::Simple(String)` encoded as `+value\r\n`
+- `Frame::Integer(i64)` encoded as `:1\r\n`
 - `Frame::Bulk(String)` encoded as `$len\r\nvalue\r\n`
 - `Frame::Array(Vec<Frame>)` encoded as `*len\r\n...`
 - `Frame::Error(String)` encoded as `-message\r\n`
@@ -46,6 +47,10 @@ Examples:
 
 ```text
 +OK
+```
+
+```text
+:1
 ```
 
 ```text

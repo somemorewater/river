@@ -29,8 +29,11 @@ commands::parser (parse command parts)
 commands::handle_parts (execute + format)
   ↓
 store::engine::RiverStore (HashMap)
+  ├── data
+  ├── expirations
+  └── cleanup
   ↓
-persistence::storage (save on SET/DEL)
+persistence::storage (save mutations + cleanup)
   ↓
 protocol::resp (encode response)
   ↓
@@ -55,7 +58,7 @@ River is intentionally split into layers:
 - **Protocol layer**: decodes and encodes RESP-style frames.
 - **Parsing layer**: transforms command parts into structured commands.
 - **Command layer**: executes parsed commands and formats responses.
-- **Storage layer**: executes operations against an engine (currently a `HashMap`).
+- **Storage layer**: executes operations, tracks TTL metadata, and removes expired keys.
 - **Persistence layer**: saves and restores database snapshots.
 - **Observability layer**: the store tracks lightweight metrics such as key count and operation count.
 

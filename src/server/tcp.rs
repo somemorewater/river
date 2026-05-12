@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
+use tokio::time::{self, Duration};
 
 pub const DEFAULT_ADDRESS: &str = "127.0.0.1:6379";
 
@@ -18,6 +19,7 @@ pub async fn start_server(
     let listener = TcpListener::bind(address).await?;
     println!("River DB server started on {address}");
     println!("River DB persistence file: {}", db_path.display());
+    start_cleanup_worker(Arc::clone(&store), db_path.clone());
 
     loop {
         let (stream, address) = listener.accept().await?;
@@ -32,6 +34,31 @@ pub async fn start_server(
             println!("[INFO] Client disconnected: {address}");
         });
     }
+}
+
+fn start_cleanup_worker(store: Arc<Mutex<RiverStore>>, db_path: PathBuf) {
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(1));
+
+        loop {
+            interval.tick().await;
+            let removed = {
+                let mut store = store.lock().await;
+                let removed = store.cleanup_expired();
+                if removed > 0 {
+                    if let Err(error) = crate::persistence::storage::save_to_disk(&store, &db_path)
+                    {
+                        eprintln!("[ERROR] Failed to persist expired key cleanup: {error}");
+                    }
+                }
+                removed
+            };
+
+            if removed > 0 {
+                println!("[INFO] Removed {removed} expired key(s)");
+            }
+        }
+    });
 }
 
 async fn handle_client(
@@ -83,6 +110,11 @@ async fn handle_client(
                 CommandResponse::Simple(message) => {
                     writer
                         .write_all(&resp::encode(&Frame::Simple(message)))
+                        .await?;
+                }
+                CommandResponse::Integer(value) => {
+                    writer
+                        .write_all(&resp::encode(&Frame::Integer(value)))
                         .await?;
                 }
                 CommandResponse::Bulk(message) => {

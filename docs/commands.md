@@ -34,6 +34,13 @@ Stores `value` under `key`.
 Response:
 - `+OK`
 
+### `SETEX key seconds value`
+
+Stores `value` under `key` and sets an expiration in seconds.
+
+Response:
+- `+OK`
+
 ### `GET key`
 
 Fetches the value for `key`.
@@ -48,6 +55,14 @@ Deletes `key` if it exists.
 
 Response:
 - `+OK`
+
+### `EXPIRE key seconds`
+
+Sets an expiration on an existing key.
+
+Response:
+- `:1` if the TTL was attached
+- `:0` if the key does not exist
 
 ### `PING`
 
@@ -118,6 +133,8 @@ Examples:
 - `HELLO` → `ERROR: Unknown command`
 - `GET` (missing key) → `ERROR: Invalid syntax`
 - `PING now` (extra arguments) → `ERROR: Invalid syntax`
+- `EXPIRE key -1` → `ERROR: Invalid syntax`
+- `SETEX key soon value` → `ERROR: Invalid syntax`
 - `STATS extra` → `ERROR: Invalid syntax`
 - `HEALTH extra` → `ERROR: Invalid syntax`
 

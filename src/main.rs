@@ -18,7 +18,8 @@ async fn main() -> std::io::Result<()> {
         std::env::var("RIVER_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_string()),
     );
     let store = match storage::load_from_disk(&db_path) {
-        Ok(Some(store)) => {
+        Ok(Some(mut store)) => {
+            store.cleanup_expired_on_startup();
             println!("River DB restored from {}", db_path.display());
             store
         }

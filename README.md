@@ -10,9 +10,10 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 - In-memory key-value store (`HashMap<String, String>`)
 - Tokio-based TCP server on `127.0.0.1:6379`
 - RESP-inspired structured protocol
+- TTL expiration with `EXPIRE` and `SETEX`
 - Shared in-memory state across multiple clients
 - Disk persistence with `serde` + `bincode`
-- Supported commands: `SET`, `GET`, `DEL`, `PING`, `STATS`, `HEALTH`, `EXIT`, `QUIT`
+- Supported commands: `SET`, `SETEX`, `GET`, `DEL`, `EXPIRE`, `PING`, `STATS`, `HEALTH`, `EXIT`, `QUIT`
 - Built-in runtime stats for keys and operations
 - Rust-based performance and safety
 - Modular architecture with networking isolated in `server/` and protocol parsing in `protocol/`
@@ -33,6 +34,9 @@ Command Parser
 Command Execution
   ↓
 RiverStore (HashMap)
+  ├── Data Store
+  ├── Expiration Store
+  └── Cleanup System
   ↓
 Persistence Layer
   ↓
@@ -147,6 +151,44 @@ $5
 Water
 ```
 
+Set a TTL on an existing key:
+
+```text
+*3
+$6
+EXPIRE
+$4
+name
+$2
+60
+```
+
+Response:
+
+```text
+:1
+```
+
+Set a value with a TTL in one command:
+
+```text
+*4
+$5
+SETEX
+$7
+session
+$2
+60
+$3
+abc
+```
+
+Response:
+
+```text
++OK
+```
+
 Missing values return RESP null:
 
 ```text
@@ -184,6 +226,7 @@ docs/
   overview.md
   architecture.md
   commands.md
+  expiration.md
   parser.md
   protocol.md
   persistence.md
@@ -199,6 +242,7 @@ Planned next steps:
 - TCP server: accept client connections and reuse the same parser + command layer
 - INFO command: richer runtime introspection (memory hints, persistence state)
 - Protocol upgrades: pipelining, richer client compatibility
+- Expiration upgrades: eviction policies, advanced cleanup scheduling
 - Persistence upgrades: append-only logs, snapshots, crash recovery
 - Benchmarking: measure throughput/latency (Criterion)
 - Concurrency improvements: shared state, locking strategy, and command handling under load

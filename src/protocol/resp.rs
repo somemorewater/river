@@ -84,6 +84,7 @@ fn decode_at(input: &[u8], start: usize) -> Result<DecodeResult, RespError> {
     match input[start] {
         b'+' => decode_simple(input, start, Frame::Simple),
         b'-' => decode_simple(input, start, Frame::Error),
+        b':' => decode_integer(input, start),
         b'$' => decode_bulk(input, start),
         b'*' => decode_array(input, start),
         _ => Err(RespError::new("invalid frame type")),
@@ -101,6 +102,18 @@ fn decode_simple(
     let value = bytes_to_string(line)?;
 
     Ok(DecodeResult::Complete(frame(value), consumed))
+}
+
+fn decode_integer(input: &[u8], start: usize) -> Result<DecodeResult, RespError> {
+    let Some((line, consumed)) = read_line(input, start + 1) else {
+        return Ok(DecodeResult::Incomplete);
+    };
+    let text = bytes_to_string(line)?;
+    let value = text
+        .parse::<i64>()
+        .map_err(|_| RespError::new("invalid integer"))?;
+
+    Ok(DecodeResult::Complete(Frame::Integer(value), consumed))
 }
 
 fn decode_bulk(input: &[u8], start: usize) -> Result<DecodeResult, RespError> {
@@ -204,6 +217,9 @@ fn encode_into(frame: &Frame, output: &mut Vec<u8>) {
             output.extend_from_slice(value.as_bytes());
             output.extend_from_slice(b"\r\n");
         }
+        Frame::Integer(value) => {
+            output.extend_from_slice(format!(":{value}\r\n").as_bytes());
+        }
         Frame::Array(items) => {
             output.extend_from_slice(format!("*{}\r\n", items.len()).as_bytes());
             for item in items {
@@ -265,6 +281,15 @@ mod tests {
             b"$5\r\nWater\r\n"
         );
         assert_eq!(encode(&Frame::Null), b"$-1\r\n");
+    }
+
+    #[test]
+    fn encodes_and_decodes_integer() {
+        assert_eq!(encode(&Frame::Integer(1)), b":1\r\n");
+        assert_eq!(
+            decode(b":42\r\n"),
+            Ok(DecodeResult::Complete(Frame::Integer(42), 5))
+        );
     }
 
     #[test]

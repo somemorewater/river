@@ -12,10 +12,11 @@ Conceptually:
 ```
 RiverStore
   └── data: HashMap<String, String>
+  └── expirations: HashMap<String, u64>
   └── operations: usize
 ```
 
-It stores string keys and string values, and tracks how many store operations have run since startup. This keeps the initial system simple while the project focuses on parsing, command dispatch, observability, and clean architecture.
+It stores string keys and string values, tracks optional expiration timestamps, and tracks how many store operations have run since startup. This keeps the initial system simple while the project focuses on parsing, command dispatch, observability, expiration, and clean architecture.
 
 ## Operations
 
@@ -25,6 +26,15 @@ Stores a value under a key:
 
 - If the key does not exist, it is inserted.
 - If the key already exists, it is overwritten.
+- Existing expiration for the key is cleared.
+- Increments the operations counter.
+
+### `set_with_expiration(key, value, seconds)`
+
+Stores a value and attaches a TTL in one operation:
+
+- Inserts or overwrites the key.
+- Stores an expiration timestamp separately from the data map.
 - Increments the operations counter.
 
 ### `get(key)`
@@ -33,6 +43,7 @@ Fetches the value for a key:
 
 - Returns `Some(&String)` if present
 - Returns `None` if missing
+- Removes and hides the value if the key has expired.
 - Increments the operations counter.
 
 The REPL layer converts this into user-facing output:
@@ -46,9 +57,22 @@ Removes a key from the store:
 
 - If the key exists, it is removed.
 - If it does not exist, the operation is still safe (no error).
+- Any expiration metadata is removed too.
 - Increments the operations counter.
 
 The REPL prints `OK` for `DEL` regardless of whether the key existed. This keeps the interface simple and predictable.
+
+### `expire(key, seconds)`
+
+Attaches a TTL to an existing key:
+
+- Returns `true` when the key exists and TTL is set.
+- Returns `false` when the key is missing or already expired.
+- Increments the operations counter.
+
+### `cleanup_expired()`
+
+Scans expiration metadata and removes expired keys. The TCP server runs this periodically in a Tokio background task.
 
 ### `stats()`
 
@@ -90,7 +114,7 @@ In this stage, River does not attempt to control allocation strategy; correctnes
 
 `RiverStore` derives `Serialize` and `Deserialize` so the persistence layer can write and restore database state.
 
-Only durable database data is persisted. Runtime metrics such as the operations counter reset when the process restarts, preserving the meaning of "operations since startup."
+Durable database data and expiration metadata are persisted. Runtime metrics such as the operations counter reset when the process restarts, preserving the meaning of "operations since startup."
 
 ## Observability
 

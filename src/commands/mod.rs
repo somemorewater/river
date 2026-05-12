@@ -8,6 +8,7 @@ use std::path::Path;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandResponse {
     Simple(String),
+    Integer(i64),
     Bulk(String),
     Null,
     Error(String),
@@ -50,6 +51,20 @@ fn execute_command(
             }
             CommandResponse::Simple("OK".to_string())
         }
+        Command::SetEx {
+            key,
+            seconds,
+            value,
+        } => {
+            store.set_with_expiration(key, value, seconds);
+            if let Some(path) = db_path {
+                if let Err(error) = storage::save_to_disk(store, path) {
+                    eprintln!("[ERROR] Failed to persist database: {error}");
+                    return CommandResponse::Error("ERROR persistence failed".to_string());
+                }
+            }
+            CommandResponse::Simple("OK".to_string())
+        }
         Command::Get { key } => {
             let Some(value) = store.get(&key) else {
                 return CommandResponse::Null;
@@ -66,6 +81,20 @@ fn execute_command(
                 }
             }
             CommandResponse::Simple("OK".to_string())
+        }
+        Command::Expire { key, seconds } => {
+            let updated = store.expire(&key, seconds);
+            if updated {
+                if let Some(path) = db_path {
+                    if let Err(error) = storage::save_to_disk(store, path) {
+                        eprintln!("[ERROR] Failed to persist database: {error}");
+                        return CommandResponse::Error("ERROR persistence failed".to_string());
+                    }
+                }
+                CommandResponse::Integer(1)
+            } else {
+                CommandResponse::Integer(0)
+            }
         }
         Command::Ping => CommandResponse::Simple("PONG".to_string()),
         Command::Stats => {
@@ -159,6 +188,74 @@ mod tests {
                 None::<&std::path::Path>,
             ),
             CommandResponse::Bulk("Water River".to_string())
+        );
+    }
+
+    #[test]
+    fn expire_returns_integer_responses() {
+        let mut store = RiverStore::new();
+
+        assert_eq!(
+            handle_parts(
+                &[
+                    "EXPIRE".to_string(),
+                    "missing".to_string(),
+                    "60".to_string()
+                ],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Integer(0)
+        );
+
+        assert_eq!(
+            handle_parts(
+                &["SET".to_string(), "session".to_string(), "abc".to_string()],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Simple("OK".to_string())
+        );
+
+        assert_eq!(
+            handle_parts(
+                &[
+                    "EXPIRE".to_string(),
+                    "session".to_string(),
+                    "60".to_string()
+                ],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Integer(1)
+        );
+    }
+
+    #[test]
+    fn setex_sets_value_with_expiration() {
+        let mut store = RiverStore::new();
+
+        assert_eq!(
+            handle_parts(
+                &[
+                    "SETEX".to_string(),
+                    "session".to_string(),
+                    "0".to_string(),
+                    "abc".to_string(),
+                ],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Simple("OK".to_string())
+        );
+
+        assert_eq!(
+            handle_parts(
+                &["GET".to_string(), "session".to_string()],
+                &mut store,
+                None::<&std::path::Path>,
+            ),
+            CommandResponse::Null
         );
     }
 
