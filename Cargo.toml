@@ -12,3 +12,7 @@ tokio = { version = "1.52.3", features = ["full"] }
 
 [dev-dependencies]
 criterion = "0.8.2"
+
+[[bench]]
+name = "store_concurrency"
+harness = false
