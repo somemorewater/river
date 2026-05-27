@@ -31,6 +31,18 @@ impl RiverStore {
         }
     }
 
+    pub fn from_maps(data: HashMap<String, String>, expirations: HashMap<String, u64>) -> Self {
+        Self {
+            data,
+            expirations,
+            operations: 0,
+        }
+    }
+
+    pub fn into_maps(self) -> (HashMap<String, String>, HashMap<String, u64>) {
+        (self.data, self.expirations)
+    }
+
     pub fn set(&mut self, key: String, value: String) {
         self.operations += 1;
         self.expirations.remove(&key);
