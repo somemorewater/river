@@ -1,23 +1,17 @@
-mod commands;
-mod persistence;
-mod protocol;
-mod server;
-mod store;
-
-use persistence::storage::{self, DEFAULT_DB_PATH};
+use river::persistence::storage::{self, DEFAULT_DB_PATH};
 use std::path::PathBuf;
 use std::sync::Arc;
-use store::engine::RiverStore;
-use tokio::sync::Mutex;
+use river::store::engine::RiverStore;
+use river::store::shared::ConcurrentStore;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let address =
-        std::env::var("RIVER_ADDR").unwrap_or_else(|_| server::tcp::DEFAULT_ADDRESS.to_string());
+        std::env::var("RIVER_ADDR").unwrap_or_else(|_| river::server::tcp::DEFAULT_ADDRESS.to_string());
     let db_path = PathBuf::from(
         std::env::var("RIVER_DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_string()),
     );
-    let store = match storage::load_from_disk(&db_path) {
+    let persisted = match storage::load_from_disk(&db_path) {
         Ok(Some(mut store)) => {
             store.cleanup_expired_on_startup();
             println!("River DB restored from {}", db_path.display());
@@ -35,9 +29,17 @@ async fn main() -> std::io::Result<()> {
             RiverStore::new()
         }
     };
-    let store = Arc::new(Mutex::new(store));
+    let shard_count = std::env::var("RIVER_SHARDS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get() * 4)
+                .unwrap_or(8)
+        });
+    let store = Arc::new(ConcurrentStore::from_persisted(persisted, shard_count).await);
 
-    match server::tcp::start_server(store, &address, db_path).await {
+    match river::server::tcp::start_server(store, &address, db_path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
             eprintln!(
