@@ -1,18 +1,17 @@
 use crate::commands::{CommandResponse, handle_parts};
 use crate::protocol::frame::Frame;
 use crate::protocol::resp::{self, DecodeResult};
-use crate::store::engine::RiverStore;
+use crate::store::shared::ConcurrentStore;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 
 pub const DEFAULT_ADDRESS: &str = "127.0.0.1:6379";
 
 pub async fn start_server(
-    store: Arc<Mutex<RiverStore>>,
+    store: Arc<ConcurrentStore>,
     address: &str,
     db_path: PathBuf,
 ) -> std::io::Result<()> {
@@ -36,23 +35,19 @@ pub async fn start_server(
     }
 }
 
-fn start_cleanup_worker(store: Arc<Mutex<RiverStore>>, db_path: PathBuf) {
+fn start_cleanup_worker(store: Arc<ConcurrentStore>, db_path: PathBuf) {
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(1));
 
         loop {
             interval.tick().await;
-            let removed = {
-                let mut store = store.lock().await;
-                let removed = store.cleanup_expired();
-                if removed > 0 {
-                    if let Err(error) = crate::persistence::storage::save_to_disk(&store, &db_path)
-                    {
-                        eprintln!("[ERROR] Failed to persist expired key cleanup: {error}");
-                    }
+            let removed = store.cleanup_expired().await;
+            if removed > 0 {
+                let snapshot = store.snapshot().await;
+                if let Err(error) = crate::persistence::storage::save_to_disk(&snapshot, &db_path) {
+                    eprintln!("[ERROR] Failed to persist expired key cleanup: {error}");
                 }
-                removed
-            };
+            }
 
             if removed > 0 {
                 println!("[INFO] Removed {removed} expired key(s)");
@@ -63,7 +58,7 @@ fn start_cleanup_worker(store: Arc<Mutex<RiverStore>>, db_path: PathBuf) {
 
 async fn handle_client(
     stream: TcpStream,
-    store: Arc<Mutex<RiverStore>>,
+    store: Arc<ConcurrentStore>,
     db_path: PathBuf,
 ) -> std::io::Result<()> {
     let (mut reader, mut writer) = stream.into_split();
@@ -99,8 +94,7 @@ async fn handle_client(
 
             let response = match resp::frame_to_parts(decoded) {
                 Ok(Some(parts)) => {
-                    let mut store = store.lock().await;
-                    handle_parts(&parts, &mut store, Some(&db_path))
+                    handle_parts(&parts, &store, Some(&db_path)).await
                 }
                 Ok(None) => CommandResponse::Empty,
                 Err(error) => CommandResponse::Error(format!("ERROR {}", error.message())),
