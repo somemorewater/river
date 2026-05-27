@@ -7,7 +7,7 @@ Source:
 
 ## Responsibilities
 
-- Serialize the current `RiverStore`
+- Serialize a `RiverStore` snapshot of the live store
 - Write binary database data to disk
 - Load database state on startup
 - Preserve key expiration metadata across restarts

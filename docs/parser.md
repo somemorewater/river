@@ -61,7 +61,7 @@ frame_to_parts(frame)
   ↓
 parse_parts(&parts)
   ↓
-dispatch Command to RiverStore
+dispatch Command to ConcurrentStore
   ↓
 write response
 ```

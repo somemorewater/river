@@ -12,7 +12,7 @@ The current implementation focuses on clarity and modularity: a Tokio TCP server
 ## Non-Goals (for now)
 
 - No append-only log or advanced crash recovery yet
-- No advanced concurrency optimizations yet
+- No lock-free or transaction-grade concurrency yet
 - No advanced query language; only a small command set
 
 ## High-Level Architecture
@@ -28,10 +28,10 @@ commands::parser (parse command parts)
   ↓
 commands::handle_parts (execute + format)
   ↓
-store::engine::RiverStore (HashMap)
-  ├── data
-  ├── expirations
-  └── cleanup
+store::shared::ConcurrentStore (sharded, async RwLock)
+  ├── partitions (shards)
+  ├── per-shard expirations
+  └── background cleanup
   ↓
 persistence::storage (save mutations + cleanup)
   ↓
@@ -46,7 +46,7 @@ socket response bytes
 2. Each connected client is handled in its own Tokio task.
 3. Socket bytes are decoded into RESP-style frames.
 4. Command arrays are parsed into a `Command` enum (or rejected with an error).
-5. The command module executes the command against shared `RiverStore` state.
+5. The command module executes the command against shared `ConcurrentStore` state.
 6. Mutating commands save the store to disk.
 7. A response is encoded as RESP and written back to the client.
 

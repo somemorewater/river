@@ -17,10 +17,10 @@ River's networking layer lives in `src/server/tcp.rs`.
 All clients share the same store:
 
 ```
-Arc<tokio::sync::Mutex<RiverStore>>
+Arc<ConcurrentStore>
 ```
 
-This keeps the first networked implementation simple and correct. The mutex ensures only one command mutates or reads the store at a time.
+`ConcurrentStore` is a sharded in-memory store (multiple partitions, each protected by an async `RwLock`). This allows concurrent reads and reduces contention under multi-client load while keeping write operations safe.
 
 ## Request Flow
 
@@ -33,7 +33,7 @@ protocol::resp::decode()
   ↓
 commands::handle_parts()
   ↓
-RiverStore
+ConcurrentStore
   ↓
 protocol::resp::encode()
   ↓

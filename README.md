@@ -11,7 +11,7 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 - Tokio-based TCP server on `127.0.0.1:6379`
 - RESP-inspired structured protocol
 - TTL expiration with `EXPIRE` and `SETEX`
-- Shared in-memory state across multiple clients
+- Shared in-memory state across multiple clients (sharded, async `RwLock`)
 - Disk persistence with `serde` + `bincode`
 - Supported commands: `SET`, `SETEX`, `GET`, `DEL`, `EXPIRE`, `PING`, `STATS`, `HEALTH`, `EXIT`, `QUIT`
 - Built-in runtime stats for keys and operations
@@ -33,9 +33,9 @@ Command Parser
   ↓
 Command Execution
   ↓
-RiverStore (HashMap)
-  ├── Data Store
-  ├── Expiration Store
+ConcurrentStore (sharded partitions)
+  ├── Data Store (per shard)
+  ├── Expiration Store (per shard)
   └── Cleanup System
   ↓
 Persistence Layer
@@ -76,6 +76,12 @@ Start the TCP server:
 
 ```bash
 cargo run
+```
+
+Tune concurrency (shard count):
+
+```bash
+RIVER_SHARDS=64 cargo run
 ```
 
 You should see:
@@ -205,10 +211,12 @@ Errors return RESP error frames:
 
 ```
 src/
+  lib.rs             # Library entry (shared by benches)
   main.rs            # Bootstrap/start TCP server
   store/
     mod.rs
     engine.rs        # RiverStore (HashMap-based data + metrics)
+    shared.rs        # ConcurrentStore (sharded async access layer)
   commands/
     mod.rs           # Command execution + response formatting
     parser.rs        # Input cleaning + parsing into Command enum
@@ -245,7 +253,15 @@ Planned next steps:
 - Expiration upgrades: eviction policies, advanced cleanup scheduling
 - Persistence upgrades: append-only logs, snapshots, crash recovery
 - Benchmarking: measure throughput/latency (Criterion)
-- Concurrency improvements: shared state, locking strategy, and command handling under load
+- Next scaling steps: pipelining, append-only persistence, richer observability
+
+## Benchmarking
+
+Run the store concurrency benchmark:
+
+```bash
+cargo bench --bench store_concurrency
+```
 
 ## Philosophy
 

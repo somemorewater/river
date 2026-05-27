@@ -35,7 +35,8 @@ Mapping to code:
 - **Protocol Layer**: `src/protocol/resp.rs`, `src/protocol/frame.rs`
 - **Parser**: `src/commands/parser.rs`
 - **Command Handler**: `src/commands/mod.rs`
-- **Store**: `src/store/engine.rs`
+- **Store Engine**: `src/store/engine.rs`
+- **Concurrent Store Layer**: `src/store/shared.rs`
 - **Persistence**: `src/persistence/storage.rs`
 - **Bootstrap**: `src/main.rs`
 
@@ -70,7 +71,7 @@ River keeps parsing and storage separate for three reasons:
 
 **Storage responsibilities** (`store` module):
 
-- Manage in-memory state (`HashMap<String, String>`)
+- Manage in-memory state (`HashMap<String, String>`) and concurrency
 - Implement `set`, `set_with_expiration`, `get`, `delete`, and `expire` operations
 - Track key expiration metadata separately from stored values
 - Remove expired keys during reads and background cleanup
@@ -99,14 +100,15 @@ commands::parser::parse_parts
   ↓
 commands::handle_parts
   ↓
-RiverStore
+ConcurrentStore
   ↓
 protocol::resp::encode
   ↓
 write bytes
 ```
 
-Each client connection runs in its own Tokio task. Shared database state is protected with `Arc<tokio::sync::Mutex<RiverStore>>`.
+Each client connection runs in its own Tokio task.
+Shared database state is held in an `Arc<ConcurrentStore>`, which shards keys across multiple `RwLock`-protected partitions to reduce lock contention and allow parallel reads.
 
 ## Observability Path
 
@@ -133,7 +135,7 @@ Persistence is triggered only by mutating commands:
 ```
 SET / SETEX / DEL / EXPIRE
   ↓
-RiverStore mutation
+ConcurrentStore snapshot
   ↓
 persistence::storage::save_to_disk()
   ↓

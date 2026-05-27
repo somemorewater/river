@@ -1,9 +1,10 @@
-# Store Engine (`RiverStore`)
+# Store Engine (`RiverStore`) and Concurrent Access (`ConcurrentStore`)
 
-River’s storage engine is currently a single struct: `RiverStore`, backed by an in-memory `HashMap<String, String>` with a small internal metrics counter.
+River’s storage engine is still `RiverStore` (a `HashMap` + TTL metadata) for persistence and single-threaded correctness, but the live server now uses a concurrent wrapper: `ConcurrentStore`.
 
 Source:
 - `src/store/engine.rs`
+- `src/store/shared.rs`
 
 ## The `RiverStore` Struct
 
@@ -17,6 +18,31 @@ RiverStore
 ```
 
 It stores string keys and string values, tracks optional expiration timestamps, and tracks how many store operations have run since startup. This keeps the initial system simple while the project focuses on parsing, command dispatch, observability, expiration, and clean architecture.
+
+## Concurrent Access Layer (`ConcurrentStore`)
+
+The TCP server shares a single `Arc<ConcurrentStore>` across all clients. Internally, `ConcurrentStore` shards keys across multiple partitions:
+
+```
+ConcurrentStore
+  ├── shards: Vec<RwLock<Shard>>
+  ├── operations: AtomicUsize
+  └── started_at: Instant
+
+Shard
+  ├── data: HashMap<String, String>
+  └── expirations: HashMap<String, u64>
+```
+
+Key routing is deterministic:
+
+- `shard = hash(key) % shard_count`
+
+This design:
+
+- Allows concurrent reads across shards
+- Limits write lock scope to a single shard
+- Avoids a single global lock under multi-client load
 
 ## Operations
 
@@ -46,7 +72,7 @@ Fetches the value for a key:
 - Removes and hides the value if the key has expired.
 - Increments the operations counter.
 
-The REPL layer converts this into user-facing output:
+The command layer converts this into user-facing output:
 
 - present → prints the value
 - missing → prints `NULL`
@@ -113,6 +139,11 @@ In this stage, River does not attempt to control allocation strategy; correctnes
 ## Serialization Behavior
 
 `RiverStore` derives `Serialize` and `Deserialize` so the persistence layer can write and restore database state.
+
+`ConcurrentStore` is not directly serialized; instead the server takes a point-in-time snapshot:
+
+- `ConcurrentStore::snapshot() -> RiverStore`
+- persistence writes the `RiverStore` snapshot to disk
 
 Durable database data and expiration metadata are persisted. Runtime metrics such as the operations counter reset when the process restarts, preserving the meaning of "operations since startup."
 
