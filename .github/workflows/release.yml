@@ -136,7 +136,9 @@ jobs:
           trap 'kill $SRV 2>/dev/null || true' EXIT
           READY=0
           for _ in $(seq 1 15); do
-            if printf 'PING\nQUIT\n' | "$BIN" cli --port 2107 2>/dev/null | grep -q "^PONG$"; then
+            # NOTE: the CLI prints `river> ` without a trailing newline, so
+            # responses share the prompt line (`river> PONG`). Match loosely.
+            if printf 'PING\nQUIT\n' | "$BIN" cli --port 2107 2>/dev/null | grep -q "PONG"; then
               READY=1
               break
             fi
@@ -144,8 +146,8 @@ jobs:
           done
           test "$READY" -eq 1
           printf 'PING\nGET missing\nQUIT\n' | "$BIN" cli --port 2107 > "$RUNNER_TEMP/smoke.out"
-          grep -q "^PONG$" "$RUNNER_TEMP/smoke.out"
-          grep -q "^(nil)$" "$RUNNER_TEMP/smoke.out"
+          grep -q "PONG" "$RUNNER_TEMP/smoke.out"
+          grep -q "(nil)" "$RUNNER_TEMP/smoke.out"
           kill $SRV
           trap - EXIT
           echo "smoke test passed"
