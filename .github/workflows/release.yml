@@ -120,14 +120,29 @@ jobs:
         run: |
           set -euo pipefail
           BIN="target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
-          # The binary prints usage for unknown subcommands (exit 2).
-          "$BIN" bad-command 2>&1 | grep -q "Usage: river"
-          # Boot a throwaway server and exercise it through the real CLI.
+          # The binary prints usage for unknown subcommands and exits 2
+          # (a pipeline would report that nonzero status, so check it directly).
+          set +e
+          "$BIN" bad-command >"$RUNNER_TEMP/usage.out" 2>&1
+          CODE=$?
+          set -e
+          test "$CODE" -eq 2
+          grep -q "Usage: river" "$RUNNER_TEMP/usage.out"
+          # Boot a throwaway server and exercise it through the real CLI,
+          # waiting until the server accepts connections.
           export RIVER_DB_PATH="$RUNNER_TEMP/smoke.db"
           export RIVER_ADDR="127.0.0.1:2107"
           "$BIN" server & SRV=$!
           trap 'kill $SRV 2>/dev/null || true' EXIT
-          sleep 2
+          READY=0
+          for _ in $(seq 1 15); do
+            if printf 'PING\nQUIT\n' | "$BIN" cli --port 2107 2>/dev/null | grep -q "^PONG$"; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          test "$READY" -eq 1
           printf 'PING\nGET missing\nQUIT\n' | "$BIN" cli --port 2107 > "$RUNNER_TEMP/smoke.out"
           grep -q "^PONG$" "$RUNNER_TEMP/smoke.out"
           grep -q "^(nil)$" "$RUNNER_TEMP/smoke.out"
@@ -155,7 +170,13 @@ jobs:
           $env:RIVER_ADDR = "127.0.0.1:2107"
           $proc = Start-Process $bin -ArgumentList 'server' -PassThru
           try {
-            Start-Sleep 3
+            $ready = $false
+            for ($i = 0; $i -lt 15 -and -not $ready; $i++) {
+              Start-Sleep 1
+              $probe = @('PING', 'QUIT') | & $bin cli --port 2107 2>$null | Out-String
+              if ($probe -match 'PONG') { $ready = $true }
+            }
+            if (-not $ready) { throw 'server did not become ready' }
             $out = @('PING', 'GET missing', 'QUIT') | & $bin cli --port 2107 | Out-String
             if ($out -notmatch 'PONG') { throw "PING roundtrip failed: $out" }
             if ($out -notmatch '\(nil\)') { throw "GET-missing roundtrip failed: $out" }
