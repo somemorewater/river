@@ -1,0 +1,237 @@
+# Release build pipeline for River.
+#
+# Triggers when a version tag (v*) is pushed, e.g. v1.0.0, and can also be
+# started manually (workflow_dispatch) to validate the pipeline without
+# creating a tag. Manual runs use the `version` input for archive names.
+#
+# This workflow ONLY builds, smoke-tests, packages, and uploads artifacts.
+# It does NOT create a GitHub Release. Attaching artifacts to a public
+# release is a separate, deliberate step after inspection.
+#
+# Design notes:
+# - One native GitHub-hosted runner per target (no cross-compiling), except
+#   macOS x86_64, which is built on the ARM macOS runner via the Apple SDK
+#   (supported by rustc/Clang out of the box, no extra toolchain needed).
+# - Same stable Rust toolchain on every job via dtolnay/rust-toolchain.
+# - `cargo build --release --locked` so builds honor Cargo.lock.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for archive names (e.g. v1.0.0)"
+        required: false
+        default: "v1.0.0"
+
+permissions:
+  contents: read
+
+env:
+  BIN_NAME: river
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+            can_run: true
+          - name: linux-aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive_ext: tar.gz
+            can_run: true
+          - name: macos-x86_64
+            runner: macos-15
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+            # Built on an ARM runner; the binary cannot run here.
+            can_run: false
+          - name: macos-aarch64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            archive_ext: tar.gz
+            can_run: true
+          - name: windows-x86_64
+            runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+            can_run: true
+          - name: windows-aarch64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            archive_ext: zip
+            can_run: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        shell: bash
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Verify binary exists (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          test -x "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
+          ls -l "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
+
+      - name: Verify binary exists (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe"
+          if (-not (Test-Path $bin)) { throw "missing binary: $bin" }
+          Get-Item $bin | Format-Table Name, Length
+
+      - name: Smoke test (Unix, native arch)
+        if: runner.os != 'Windows' && matrix.can_run
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
+          # The binary prints usage for unknown subcommands (exit 2).
+          "$BIN" bad-command 2>&1 | grep -q "Usage: river"
+          # Boot a throwaway server and exercise it through the real CLI.
+          export RIVER_DB_PATH="$RUNNER_TEMP/smoke.db"
+          export RIVER_ADDR="127.0.0.1:2107"
+          "$BIN" server & SRV=$!
+          trap 'kill $SRV 2>/dev/null || true' EXIT
+          sleep 2
+          printf 'PING\nGET missing\nQUIT\n' | "$BIN" cli --port 2107 > "$RUNNER_TEMP/smoke.out"
+          grep -q "^PONG$" "$RUNNER_TEMP/smoke.out"
+          grep -q "^(nil)$" "$RUNNER_TEMP/smoke.out"
+          kill $SRV
+          trap - EXIT
+          echo "smoke test passed"
+
+      - name: Inspect cross-compiled binary (macOS x86_64)
+        if: matrix.can_run == false
+        shell: bash
+        run: |
+          file "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
+
+      - name: Smoke test (Windows, native arch)
+        if: runner.os == 'Windows' && matrix.can_run
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bin = "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe"
+          # The binary prints usage for unknown subcommands (exit 2).
+          $usage = & $bin bad-command 2>&1 | Out-String
+          if ($usage -notmatch 'Usage: river') { throw "unexpected usage output: $usage" }
+          # Boot a throwaway server and exercise it through the real CLI.
+          $env:RIVER_DB_PATH = "$env:RUNNER_TEMP\smoke.db"
+          $env:RIVER_ADDR = "127.0.0.1:2107"
+          $proc = Start-Process $bin -ArgumentList 'server' -PassThru
+          try {
+            Start-Sleep 3
+            $out = @('PING', 'GET missing', 'QUIT') | & $bin cli --port 2107 | Out-String
+            if ($out -notmatch 'PONG') { throw "PING roundtrip failed: $out" }
+            if ($out -notmatch '\(nil\)') { throw "GET-missing roundtrip failed: $out" }
+          } finally {
+            Stop-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          }
+          'smoke test passed'
+
+      - name: Package archive (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          STAGE="stage/${{ matrix.name }}"
+          mkdir -p "$STAGE"
+          cp "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}" "$STAGE/"
+          chmod +x "$STAGE/${{ env.BIN_NAME }}"
+          cp README.md "$STAGE/"
+          # LICENSE is included when the project adds one; never fail without it.
+          cp LICENSE* "$STAGE/" 2>/dev/null || true
+          ARCHIVE="river-${VERSION}-${{ matrix.name }}.tar.gz"
+          tar -czf "$ARCHIVE" -C stage "${{ matrix.name }}"
+          ls -l "$ARCHIVE"
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Package archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = "stage/${{ matrix.name }}"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" $stage
+          Copy-Item README.md $stage
+          # LICENSE is included when the project adds one; never fail without it.
+          Copy-Item LICENSE* $stage -ErrorAction SilentlyContinue
+          $archive = "river-$env:VERSION-${{ matrix.name }}.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive
+          Get-Item $archive | Format-Table Name, Length
+          "ARCHIVE=$archive" >> $env:GITHUB_ENV
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
+          if-no-files-found: error
+
+  checksums:
+    name: checksums (SHA256SUMS)
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all release archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "river-*"
+          merge-multiple: true
+          path: dist
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          ls -l river-*.tar.gz river-*.zip
+          sha256sum river-*.tar.gz river-*.zip > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload SHA256SUMS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHA256SUMS
+          path: dist/SHA256SUMS
+          if-no-files-found: error
