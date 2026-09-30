@@ -39,6 +39,9 @@ jobs:
   build:
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
+    # Release builds take ~2 minutes; the smoke test is bounded to ~1 minute.
+    # Fail fast instead of burning a runner if the environment stalls.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -163,6 +166,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          # Never let a native nonzero exit code throw: readiness probes
+          # legitimately fail while the server is still starting.
+          $PSNativeCommandUseErrorActionPreference = $false
           $bin = "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe"
           # The binary prints usage for unknown subcommands (exit 2).
           $usage = & $bin bad-command 2>&1 | Out-String
@@ -170,16 +176,24 @@ jobs:
           # Boot a throwaway server and exercise it through the real CLI.
           $env:RIVER_DB_PATH = "$env:RUNNER_TEMP\smoke.db"
           $env:RIVER_ADDR = "127.0.0.1:2107"
+          # Feed the CLI via files: cmd.exe `<` redirection gives the native
+          # process a real stdin with EOF. PowerShell's `@(...) | & exe`
+          # pipeline-to-native-stdin handling stalled indefinitely on some
+          # runners, so it is deliberately not used here.
+          Set-Content -Path "$env:RUNNER_TEMP\probe.txt" -Value @('PING', 'QUIT')
+          Set-Content -Path "$env:RUNNER_TEMP\smoke.txt" -Value @('PING', 'GET missing', 'QUIT')
           $proc = Start-Process $bin -ArgumentList 'server' -PassThru
           try {
             $ready = $false
             for ($i = 0; $i -lt 15 -and -not $ready; $i++) {
               Start-Sleep 1
-              $probe = @('PING', 'QUIT') | & $bin cli --port 2107 2>$null | Out-String
-              if ($probe -match 'PONG') { $ready = $true }
+              cmd /c "`"$bin`" cli --port 2107 < `"$env:RUNNER_TEMP\probe.txt`" > `"$env:RUNNER_TEMP\probe-out.txt`""
+              if ((Get-Content "$env:RUNNER_TEMP\probe-out.txt" -Raw) -match 'PONG') { $ready = $true }
             }
             if (-not $ready) { throw 'server did not become ready' }
-            $out = @('PING', 'GET missing', 'QUIT') | & $bin cli --port 2107 | Out-String
+            cmd /c "`"$bin`" cli --port 2107 < `"$env:RUNNER_TEMP\smoke.txt`" > `"$env:RUNNER_TEMP\smoke-out.txt`""
+            if ($LASTEXITCODE -ne 0) { throw "CLI did not exit cleanly: $LASTEXITCODE" }
+            $out = Get-Content "$env:RUNNER_TEMP\smoke-out.txt" -Raw
             if ($out -notmatch 'PONG') { throw "PING roundtrip failed: $out" }
             if ($out -notmatch '\(nil\)') { throw "GET-missing roundtrip failed: $out" }
           } finally {
