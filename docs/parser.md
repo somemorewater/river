@@ -9,10 +9,10 @@ Source:
 
 The parser’s job is to convert raw user input into a structured representation:
 
-- Input: command parts from the protocol layer, or a raw string for tests/local tooling
+- Input: command parts (`&[String]`) from the protocol layer (`resp::frame_to_parts`)
 - Output: `Option<Command>` or a `ParseError`
 
-This makes the storage engine independent of any particular input transport.
+There is no CLI/REPL; the only current transport is TCP. This makes the storage engine independent of any particular input transport.
 
 ## Parsing Steps
 
@@ -20,12 +20,16 @@ This makes the storage engine independent of any particular input transport.
 2. **Command match**: uppercase the first part and match it against supported commands.
 3. **Argument validation**: enforce exact argument counts:
    - `SET` requires 2 args (`key value`)
+   - `SETEX` requires 3 args (`key seconds value`, `seconds: u64`)
    - `GET` requires 1 arg (`key`)
    - `DEL` requires 1 arg (`key`)
+   - `EXPIRE` requires 2 args (`key seconds`, `seconds: u64`)
    - `PING` requires 0 args
    - `STATS`/`/STATS` require 0 args
    - `HEALTH`/`/HEALTH` require 0 args
    - `EXIT`/`QUIT` require 0 args
+
+Invalid TTL values (negative, non-numeric, wrong arity) return `InvalidSyntax`. There is no `DELETE` alias.
 
 ## Output Types
 

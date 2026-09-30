@@ -11,13 +11,13 @@ Source:
 On startup, River binds to:
 
 ```
-127.0.0.1:6379
+127.0.0.1:2007
 ```
 
 Connect with:
 
 ```bash
-nc 127.0.0.1 6379
+nc 127.0.0.1 2007
 ```
 
 Each RESP array sent by a client is parsed as one command. The connection remains open until:
@@ -51,7 +51,7 @@ Response:
 
 ### `DEL key`
 
-Deletes `key` if it exists.
+Deletes `key` if it exists. There is no `DELETE` alias.
 
 Response:
 - `+OK`
@@ -99,11 +99,11 @@ operations: 12
 uptime: 0
 ```
 
-`uptime` is currently a placeholder field.
+`uptime` is the live server uptime in seconds (`ConcurrentStore::health()` tracks `started_at` with `Instant::now()`).
 
 ### `EXIT` / `QUIT`
 
-Stops the program.
+Closes the current client connection. The server keeps running.
 
 ## RESP Command Shape
 

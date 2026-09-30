@@ -8,7 +8,7 @@ Source:
 ## Responsibilities
 
 - Serialize a `RiverStore` snapshot of the live store
-- Write binary database data to disk
+- Write binary database data via temp file + atomic rename (`river.db.tmp` -> `river.db`)
 - Load database state on startup
 - Preserve key expiration metadata across restarts
 - Treat missing database files as an empty store

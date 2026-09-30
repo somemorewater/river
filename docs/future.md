@@ -58,12 +58,12 @@ The project includes Criterion as a dev-dependency; benchmarks can measure parse
 
 ## Concurrency Upgrades
 
-Multiple clients are supported through Tokio tasks and shared state behind a mutex. Future work can improve throughput under load.
+Multiple clients are supported through per-client Tokio tasks and shared state in a sharded store: `Arc<ConcurrentStore>` with `Vec<RwLock<Shard>>` plus an atomic operation counter. This already provides concurrent reads across shards and per-shard write locking (no single global mutex in the production path; `Mutex` appears only in benches as a baseline).
 
-Possible improvements:
+Possible further improvements:
 
-- Shared store behind a lock (simple correctness first)
-- Sharded `HashMap` to reduce lock contention
 - Dedicated worker model for command execution
+- Finer-grained expiration scheduling
+- Additional contention/latency measurements under larger workloads
 
 The current server uses Tokio for async networking.

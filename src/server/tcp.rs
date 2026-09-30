@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{self, Duration};
 
-pub const DEFAULT_ADDRESS: &str = "127.0.0.1:6379";
+pub const DEFAULT_ADDRESS: &str = "127.0.0.1:2007";
 
 pub async fn start_server(
     store: Arc<ConcurrentStore>,
@@ -18,6 +18,14 @@ pub async fn start_server(
     let listener = TcpListener::bind(address).await?;
     println!("River DB server started on {address}");
     println!("River DB persistence file: {}", db_path.display());
+    serve_on_listener(listener, store, db_path).await
+}
+
+pub async fn serve_on_listener(
+    listener: TcpListener,
+    store: Arc<ConcurrentStore>,
+    db_path: PathBuf,
+) -> std::io::Result<()> {
     start_cleanup_worker(Arc::clone(&store), db_path.clone());
 
     loop {

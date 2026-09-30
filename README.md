@@ -8,7 +8,7 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 ## Features
 
 - In-memory key-value store (`HashMap<String, String>`)
-- Tokio-based TCP server on `127.0.0.1:6379`
+- Tokio-based TCP server on `127.0.0.1:2007`
 - RESP-inspired structured protocol
 - TTL expiration with `EXPIRE` and `SETEX`
 - Shared in-memory state across multiple clients (sharded, async `RwLock`)
@@ -72,7 +72,7 @@ cargo build
 
 ## Running
 
-Start the TCP server:
+Start the TCP server (River is currently a TCP database server, not a CLI/REPL application):
 
 ```bash
 cargo run
@@ -87,13 +87,13 @@ RIVER_SHARDS=64 cargo run
 You should see:
 
 ```
-River DB server started on 127.0.0.1:6379
+River DB server started on 127.0.0.1:2007
 ```
 
-If port `6379` is already in use, run on another local port:
+If port `2007` is already in use, run on another local port:
 
 ```bash
-RIVER_ADDR=127.0.0.1:6380 cargo run
+RIVER_ADDR=127.0.0.1:2008 cargo run
 ```
 
 River persists data to `river.db` by default. To use another file:
@@ -105,8 +105,24 @@ RIVER_DB_PATH=/tmp/river-dev.db cargo run
 Connect with `nc` or `telnet` from another terminal:
 
 ```bash
-nc 127.0.0.1 6379
+nc 127.0.0.1 2007
 ```
+
+Or use the built-in interactive CLI (human-friendly, speaks RESP under the hood):
+
+```bash
+cargo run -- cli
+```
+
+```text
+river> SET name Water
+OK
+river> GET name
+Water
+```
+
+`cargo run -- cli --host 127.0.0.1 --port 2007` overrides the address;
+`--raw` shows raw RESP frames for debugging. Type `HELP` inside the CLI.
 
 ## Usage Examples
 
@@ -245,15 +261,26 @@ docs/
 
 ## Roadmap
 
-Planned next steps:
+### IMPLEMENTED
 
-- TCP server: accept client connections and reuse the same parser + command layer
+- TCP server: accepts client connections and reuses the same parser + command layer
+- RESP-based protocol with pipelining and partial-read handling
+- TTL expiration (`EXPIRE`, `SETEX`) with passive reads, 1s background cleanup, startup cleanup, and persisted expiration metadata
+- Snapshot persistence (`serde` + `bincode`, atomic temp-file + rename, restore on restart)
+- Sharded `RwLock` concurrency (`ConcurrentStore`, configurable via `RIVER_SHARDS`)
+- `STATS` / `HEALTH` with real key counts, operation counts, and real uptime
+- Criterion concurrency benchmark (`cargo bench --bench store_concurrency`, parallel GET)
+
+### PLANNED (not implemented)
+
 - INFO command: richer runtime introspection (memory hints, persistence state)
-- Protocol upgrades: pipelining, richer client compatibility
-- Expiration upgrades: eviction policies, advanced cleanup scheduling
-- Persistence upgrades: append-only logs, snapshots, crash recovery
-- Benchmarking: measure throughput/latency (Criterion)
-- Next scaling steps: pipelining, append-only persistence, richer observability
+- Richer Redis client compatibility
+- HTTP endpoints for status or diagnostics
+- Expiration upgrades: eviction policies (LRU/LFU), advanced cleanup scheduling, per-key TTL inspection
+- Persistence upgrades: append-only logs, background snapshots without blocking, checksums, compression, crash recovery manifests
+- Next scaling steps: dedicated worker model, richer observability
+
+River does NOT currently implement: CLI/REPL, `DELETE` alias (only `DEL`), INFO, AOF, replication, transactions, Pub/Sub, lists, sets, or streams.
 
 ## Benchmarking
 

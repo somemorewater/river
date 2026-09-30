@@ -1,6 +1,9 @@
 # Store Engine (`RiverStore`) and Concurrent Access (`ConcurrentStore`)
 
-River’s storage engine is still `RiverStore` (a `HashMap` + TTL metadata) for persistence and single-threaded correctness, but the live server now uses a concurrent wrapper: `ConcurrentStore`.
+River has two store types with distinct roles:
+
+- `RiverStore` (`src/store/engine.rs`): single-threaded `HashMap` + TTL metadata. Used for persistence snapshots, startup restore, and benchmarking. It is NOT the live concurrent server store.
+- `ConcurrentStore` (`src/store/shared.rs`): the live server store. Sharded partitions shared via `Arc<ConcurrentStore>` across all TCP clients.
 
 Source:
 - `src/store/engine.rs`
@@ -86,7 +89,7 @@ Removes a key from the store:
 - Any expiration metadata is removed too.
 - Increments the operations counter.
 
-The REPL prints `OK` for `DEL` regardless of whether the key existed. This keeps the interface simple and predictable.
+The server returns `+OK` for `DEL` regardless of whether the key existed. This keeps the interface simple and predictable. There is no CLI/REPL; this response is sent as a RESP frame over TCP.
 
 ### `expire(key, seconds)`
 
@@ -102,7 +105,7 @@ Scans expiration metadata and removes expired keys. The TCP server runs this per
 
 ### `stats()`
 
-Returns a `StoreStats` snapshot without mutating state:
+`RiverStore::stats(&mut self)` cleans up expired keys and then returns key/operation counts (it takes `&mut` because cleanup mutates). `ConcurrentStore::stats(&self).await` counts only non-expired keys under read locks without mutating, and reads the atomic operation counter.
 
 ```
 StoreStats

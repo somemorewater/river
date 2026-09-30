@@ -78,4 +78,4 @@ This lets the TCP server handle partial reads without assuming that one socket r
 
 ## Current Scope
 
-River is not trying to implement the full Redis protocol yet. This stage focuses on clear frame parsing, response encoding, and a protocol boundary that can evolve toward pipelining, authentication, replication, and richer client compatibility.
+River implements a RESP-based (RESP-inspired) subset, not the full Redis protocol. The framing layer already supports pipelining (multiple frames per TCP read are drained in order) and LF-only manual input. Future work is richer Redis client compatibility, authentication, and replication — not additional core framing.

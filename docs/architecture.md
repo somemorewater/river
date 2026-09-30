@@ -121,7 +121,7 @@ Parser (`Command::Stats`)
   ↓
 Command Handler
   ↓
-RiverStore::stats()
+ConcurrentStore::stats() (live path; RiverStore::stats() is the single-threaded snapshot equivalent)
   ↓
 keys / operations response
 ```

@@ -3,7 +3,8 @@
 River supports Redis-style key expiration through `EXPIRE` and `SETEX`.
 
 Source:
-- `src/store/engine.rs`
+- `src/store/engine.rs` (`RiverStore`, single-threaded snapshot/persistence type)
+- `src/store/shared.rs` (`ConcurrentStore`, live sharded server store)
 - `src/commands/parser.rs`
 - `src/commands/mod.rs`
 
@@ -86,6 +87,8 @@ This keeps stale keys from accumulating when they are not read.
 ## Persistence
 
 Expiration metadata is persisted with the store. On startup, River removes any keys that expired while the server was offline.
+
+Invalid TTL values (negative numbers, non-numeric strings) are rejected by the parser with `ERROR invalid syntax` and never reach the store.
 
 ## Future Work
 

@@ -4,10 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.102"
 bincode = "1"
 serde = { version = "1.0.228", features = ["derive"] }
-thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["full"] }
 
 [dev-dependencies]
@@ -15,4 +13,20 @@ criterion = "0.8.2"
 
 [[bench]]
 name = "store_concurrency"
+harness = false
+
+[[bench]]
+name = "store_ops"
+harness = false
+
+[[bench]]
+name = "store_workloads"
+harness = false
+
+[[bench]]
+name = "protocol"
+harness = false
+
+[[bench]]
+name = "ttl_persistence"
 harness = false

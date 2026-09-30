@@ -4,7 +4,7 @@ River's networking layer lives in `src/server/tcp.rs`.
 
 ## Responsibilities
 
-- Bind a TCP listener to `127.0.0.1:6379`
+- Bind a TCP listener to `127.0.0.1:2007` (overridable with `RIVER_ADDR`)
 - Accept client connections continuously
 - Spawn one Tokio task per client
 - Read socket bytes into a buffer
@@ -50,16 +50,16 @@ Start River:
 cargo run
 ```
 
-Use a different port when `6379` is already occupied:
+Use a different port when `2007` is already occupied:
 
 ```bash
-RIVER_ADDR=127.0.0.1:6380 cargo run
+RIVER_ADDR=127.0.0.1:2008 cargo run
 ```
 
 Connect with:
 
 ```bash
-nc 127.0.0.1 6379
+nc 127.0.0.1 2007
 ```
 
 Then send RESP frames:
@@ -73,5 +73,5 @@ PING
 For a shell-friendly one-command check:
 
 ```bash
-printf '*1\r\n$4\r\nPING\r\n' | nc 127.0.0.1 6379
+printf '*1\r\n$4\r\nPING\r\n' | nc 127.0.0.1 2007
 ```

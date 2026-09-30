@@ -205,6 +205,31 @@ fn bytes_to_string(bytes: &[u8]) -> Result<String, RespError> {
     String::from_utf8(bytes.to_vec()).map_err(|_| RespError::new("invalid UTF-8 string"))
 }
 
+/// Append a decimal integer to the output without allocating (avoids the
+/// temporary `String` that `format!` would create on every encoded frame).
+fn append_usize(mut value: usize, output: &mut Vec<u8>) {
+    let mut digits = [0u8; 20];
+    let mut len = 0;
+    if value == 0 {
+        digits[19] = b'0';
+        len = 1;
+    } else {
+        while value > 0 {
+            len += 1;
+            digits[20 - len] = b'0' + (value % 10) as u8;
+            value /= 10;
+        }
+    }
+    output.extend_from_slice(&digits[20 - len..]);
+}
+
+fn append_i64(value: i64, output: &mut Vec<u8>) {
+    if value < 0 {
+        output.extend_from_slice(b"-");
+    }
+    append_usize(value.unsigned_abs() as usize, output);
+}
+
 fn encode_into(frame: &Frame, output: &mut Vec<u8>) {
     match frame {
         Frame::Simple(value) => {
@@ -213,15 +238,21 @@ fn encode_into(frame: &Frame, output: &mut Vec<u8>) {
             output.extend_from_slice(b"\r\n");
         }
         Frame::Bulk(value) => {
-            output.extend_from_slice(format!("${}\r\n", value.len()).as_bytes());
+            output.extend_from_slice(b"$");
+            append_usize(value.len(), output);
+            output.extend_from_slice(b"\r\n");
             output.extend_from_slice(value.as_bytes());
             output.extend_from_slice(b"\r\n");
         }
         Frame::Integer(value) => {
-            output.extend_from_slice(format!(":{value}\r\n").as_bytes());
+            output.extend_from_slice(b":");
+            append_i64(*value, output);
+            output.extend_from_slice(b"\r\n");
         }
         Frame::Array(items) => {
-            output.extend_from_slice(format!("*{}\r\n", items.len()).as_bytes());
+            output.extend_from_slice(b"*");
+            append_usize(items.len(), output);
+            output.extend_from_slice(b"\r\n");
             for item in items {
                 encode_into(item, output);
             }

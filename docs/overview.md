@@ -42,7 +42,7 @@ socket response bytes
 
 ## Data Flow
 
-1. The TCP server accepts a client connection on `127.0.0.1:6379`.
+1. The TCP server accepts a client connection on `127.0.0.1:2007` (or `$RIVER_ADDR`).
 2. Each connected client is handled in its own Tokio task.
 3. Socket bytes are decoded into RESP-style frames.
 4. Command arrays are parsed into a `Command` enum (or rejected with an error).
