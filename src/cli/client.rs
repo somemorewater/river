@@ -57,6 +57,20 @@ impl RiverClient {
         self.raw
     }
 
+    /// Authenticate this connection with a password. Returns `Ok(true)` on
+    /// success, `Ok(false)` when the server has authentication disabled
+    /// (nothing to do), and `Err` on wrong credentials or I/O failure.
+    /// The password is sent once and never stored or printed.
+    pub async fn authenticate(&mut self, password: &str) -> Result<bool, ClientError> {
+        let parts = vec!["AUTH".to_string(), password.to_string()];
+        match self.execute(&parts).await? {
+            Frame::Simple(_) => Ok(true),
+            Frame::Error(message) if message == "ERROR authentication not required" => Ok(false),
+            Frame::Error(message) => Err(ClientError::Protocol(message)),
+            _ => Err(ClientError::Protocol("unexpected AUTH response".to_string())),
+        }
+    }
+
     /// Send one command (already-split parts) and return the decoded frame.
     pub async fn execute(&mut self, parts: &[String]) -> Result<Frame, ClientError> {
         let request = Frame::Array(parts.iter().map(|p| Frame::Bulk(p.clone())).collect());

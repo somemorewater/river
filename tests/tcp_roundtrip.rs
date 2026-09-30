@@ -24,6 +24,15 @@ struct TestServer {
 
 impl TestServer {
     async fn start() -> Self {
+        Self::start_with_auth(None).await
+    }
+
+    async fn start_with_auth(password: Option<&str>) -> Self {
+        use river::auth::AuthConfig;
+        let auth = match password {
+            Some(pw) => AuthConfig::with_password(pw),
+            None => AuthConfig::disabled(),
+        };
         let id = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
         let tmp_dir = std::env::temp_dir().join(format!(
             "river-tcp-test-{}-{}-{}",
@@ -44,7 +53,7 @@ impl TestServer {
         let store = Arc::new(ConcurrentStore::new(8));
         let db = db_path.clone();
         let handle = tokio::spawn(async move {
-            river::server::tcp::serve_on_listener(listener, store, db).await
+            river::server::tcp::serve_on_listener(listener, store, db, auth).await
         });
 
         // Wait until the listener accepts (no arbitrary long sleep).
@@ -93,7 +102,7 @@ impl TestServer {
         let addr = listener.local_addr().expect("local addr");
         let db = self.db_path.clone();
         let handle = tokio::spawn(async move {
-            river::server::tcp::serve_on_listener(listener, store, db).await
+            river::server::tcp::serve_on_listener(listener, store, db, river::auth::AuthConfig::disabled()).await
         });
         // readiness probe
         for _ in 0..50 {
@@ -516,4 +525,95 @@ async fn exit_closes_client_but_server_survives() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     let mut conn3 = RespConn::connect(server.addr).await;
     assert_eq!(conn3.cmd(&["PING"]).await, Frame::Simple("PONG".to_string()));
+}
+
+fn stats_active(body: &str) -> usize {
+    body.lines()
+        .find_map(|line| {
+            line.strip_prefix("connections_active:")
+                .and_then(|v| v.trim().parse::<usize>().ok())
+        })
+        .expect("STATS must report connections_active")
+}
+
+async fn poll_active(conn: &mut RespConn, want: usize) -> usize {
+    let mut seen = 0usize;
+    for _ in 0..100 {
+        let Frame::Bulk(body) = conn.cmd(&["STATS"]).await else {
+            panic!("STATS must return bulk");
+        };
+        seen = stats_active(&body);
+
+        if seen == want {
+            return seen;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    seen
+}
+
+#[tokio::test]
+async fn connection_gauge_tracks_open_and_close() {
+    let server = TestServer::start().await;
+    // One silent held connection plus this checker = 2 active.
+    let holder = TcpStream::connect(server.addr).await.expect("holder");
+    let mut checker = RespConn::connect(server.addr).await;
+    assert_eq!(poll_active(&mut checker, 2).await, 2);
+
+    drop(holder);
+    assert_eq!(poll_active(&mut checker, 1).await, 1);
+}
+
+#[tokio::test]
+async fn auth_session_is_per_connection() {
+    let server = TestServer::start_with_auth(Some("s3cr3t")).await;
+    let mut authed = RespConn::connect(server.addr).await;
+    let mut stranger = RespConn::connect(server.addr).await;
+
+    // Unauthenticated: even PING is rejected, QUIT still works.
+    assert_eq!(
+        stranger.cmd(&["PING"]).await,
+        Frame::Error("ERROR authentication required".to_string())
+    );
+    assert_eq!(
+        stranger.cmd(&["GET", "k"]).await,
+        Frame::Error("ERROR authentication required".to_string())
+    );
+
+    // Wrong password authenticates nothing.
+    assert_eq!(
+        stranger.cmd(&["AUTH", "wrong"]).await,
+        Frame::Error("ERROR authentication failed".to_string())
+    );
+    assert_eq!(
+        stranger.cmd(&["PING"]).await,
+        Frame::Error("ERROR authentication required".to_string())
+    );
+
+    // Correct AUTH unlocks only that connection.
+    assert_eq!(
+        authed.cmd(&["AUTH", "s3cr3t"]).await,
+        Frame::Simple("OK".to_string())
+    );
+    assert_eq!(
+        authed.cmd(&["SET", "k", "v"]).await,
+        Frame::Simple("OK".to_string())
+    );
+    assert_eq!(
+        authed.cmd(&["GET", "k"]).await,
+        Frame::Bulk("v".to_string())
+    );
+    assert_eq!(
+        stranger.cmd(&["GET", "k"]).await,
+        Frame::Error("ERROR authentication required".to_string())
+    );
+
+    // Disconnecting discards the session: reconnect starts unauthenticated.
+    drop(authed);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let mut fresh = RespConn::connect(server.addr).await;
+    assert_eq!(
+        fresh.cmd(&["GET", "k"]).await,
+        Frame::Error("ERROR authentication required".to_string())
+    );
 }

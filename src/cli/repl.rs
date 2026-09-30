@@ -113,6 +113,12 @@ pub fn parse_line(line: &str) -> LocalAction {
             }
             LocalAction::Send(vec![name, tokens[1].to_string(), tokens[2].to_string()])
         }
+        "AUTH" => {
+            if tokens.len() != 2 {
+                return LocalAction::Usage("Usage: AUTH <password>");
+            }
+            LocalAction::Send(vec![name, tokens[1].to_string()])
+        }
         "PING" | "STATS" | "HEALTH" => {
             if tokens.len() != 1 {
                 return LocalAction::Usage(match name.as_str() {
@@ -200,6 +206,7 @@ Commands:
   DEL <key>                   Delete a key
   EXPIRE <key> <seconds>      Attach a TTL (1 = set, 0 = missing)
   SETEX <key> <seconds> <value>  Store a value with a TTL
+  AUTH <password>             Authenticate (needed when the server requires it)
   PING                        Connectivity check
   STATS                       Key and operation counts
   HEALTH                      Status, counts, and uptime
@@ -213,6 +220,7 @@ pub fn help_for(command: &str) -> Option<&'static str> {
         "DEL" => Some("Usage: DEL <key>\nDeletes the key if present. Always replies OK."),
         "EXPIRE" => Some("Usage: EXPIRE <key> <seconds>\nSets a TTL on an existing key. Replies 1 when set, 0 when the key is missing."),
         "SETEX" => Some("Usage: SETEX <key> <seconds> <value>\nStores <value> with a TTL in one step. Replies OK."),
+        "AUTH" => Some("Usage: AUTH <password>\nAuthenticates this connection. Needed only when the server was started with RIVER_PASSWORD. Replies OK."),
         "PING" => Some("Usage: PING\nReplies PONG."),
         "STATS" => Some("Usage: STATS\nShows key and operation counts."),
         "HEALTH" => Some("Usage: HEALTH\nShows status, counts, and server uptime."),
@@ -240,6 +248,22 @@ pub async fn run_repl(args: &CliArgs) -> i32 {
     println!("River CLI v{}", env!("CARGO_PKG_VERSION"));
     println!("Connected to {}", args.address());
     println!("\nType HELP for available commands.\n");
+
+    // Server password comes from the environment so secrets never appear in
+    // shell history or on screen. No prompt: echo cannot be disabled without
+    // extra dependencies, and a visible prompt would be worse.
+    if let Ok(password) = std::env::var(crate::auth::PASSWORD_ENV_VAR)
+        && !password.is_empty()
+    {
+        match client.authenticate(&password).await {
+            Ok(true) => println!("Authenticated."),
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("Authentication failed: {e}");
+                return 1;
+            }
+        }
+    }
 
     let stdin = tokio::io::stdin();
     let mut lines = BufReader::new(stdin).lines();

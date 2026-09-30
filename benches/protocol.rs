@@ -5,9 +5,9 @@
 //! measured on in-memory buffers only — no TCP involved.
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
 use river::protocol::frame::Frame;
 use river::protocol::resp::{self, DecodeResult};
+use std::hint::black_box;
 
 fn sample_frames() -> Vec<(&'static str, Frame)> {
     vec![

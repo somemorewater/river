@@ -123,6 +123,17 @@ Water
 
 `cargo run -- cli --host 127.0.0.1 --port 2007` overrides the address;
 `--raw` shows raw RESP frames for debugging. Type `HELP` inside the CLI.
+With a password-protected server, set the same password for the CLI:
+
+```bash
+RIVER_PASSWORD=s3cr3t cargo run -- cli
+```
+
+See `docs/security.md`. Password auth does not encrypt traffic.
+
+Log level via `RIVER_LOG=debug cargo run -- server` (default `info`).
+`STATS` reports keys, operations, uptime, per-command counts, connections,
+errors, expirations, and persistence counters — see `docs/observability.md`.
 
 ## Usage Examples
 
@@ -273,6 +284,7 @@ docs/
 
 ### PLANNED (not implemented)
 
+- Crash recovery / durability: append-only log or equivalent, checksums/manifests, documented guarantees (snapshots only today)
 - INFO command: richer runtime introspection (memory hints, persistence state)
 - Richer Redis client compatibility
 - HTTP endpoints for status or diagnostics
@@ -280,7 +292,7 @@ docs/
 - Persistence upgrades: append-only logs, background snapshots without blocking, checksums, compression, crash recovery manifests
 - Next scaling steps: dedicated worker model, richer observability
 
-River does NOT currently implement: CLI/REPL, `DELETE` alias (only `DEL`), INFO, AOF, replication, transactions, Pub/Sub, lists, sets, or streams.
+River does NOT currently implement: `DELETE` alias (only `DEL`), INFO, AOF, replication, transactions, Pub/Sub, lists, sets, or streams.
 
 ## Benchmarking
 

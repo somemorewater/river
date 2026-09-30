@@ -10,10 +10,10 @@ mod common;
 
 use common::{KEY_SPACE, key, seed_river_store, value};
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
 use river::persistence::storage;
 use river::store::engine::RiverStore;
 use river::store::shared::ConcurrentStore;
+use std::hint::black_box;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -21,12 +21,8 @@ static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn tmp_db_path(tag: &str) -> std::path::PathBuf {
     let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "river-bench-{}-{}-{}",
-        std::process::id(),
-        tag,
-        id
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("river-bench-{}-{}-{}", std::process::id(), tag, id));
     std::fs::create_dir_all(&dir).expect("bench temp dir");
     dir.join("bench.db")
 }
@@ -112,9 +108,7 @@ fn bench_ttl(c: &mut Criterion) {
         let rt = common::new_runtime();
         let store = Arc::new(ConcurrentStore::new(8));
         rt.block_on(async {
-            store
-                .set_with_expiration(key(0), value(0), 3_600)
-                .await;
+            store.set_with_expiration(key(0), value(0), 3_600).await;
         });
         b.iter(|| {
             rt.block_on(async {

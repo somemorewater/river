@@ -12,9 +12,9 @@ mod common;
 
 use common::{KEY_SPACE, key, seed_river_store, value};
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::hint::black_box;
 use river::store::engine::RiverStore;
 use river::store::shared::ConcurrentStore;
+use std::hint::black_box;
 use std::sync::Arc;
 
 fn bench_set(c: &mut Criterion) {

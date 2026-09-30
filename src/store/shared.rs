@@ -1,3 +1,4 @@
+use crate::metrics::Metrics;
 use crate::store::engine::RiverStore;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -16,6 +17,7 @@ pub struct ConcurrentStore {
     shards: Vec<RwLock<Shard>>,
     operations: AtomicUsize,
     started_at: Instant,
+    metrics: Metrics,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40,6 +42,7 @@ impl ConcurrentStore {
             shards,
             operations: AtomicUsize::new(0),
             started_at: Instant::now(),
+            metrics: Metrics::new(),
         }
     }
 
@@ -72,6 +75,16 @@ impl ConcurrentStore {
 
     pub fn shard_count(&self) -> usize {
         self.shards.len()
+    }
+
+    /// Operational counters shared by the server, commands, and STATS.
+    pub fn metrics(&self) -> &Metrics {
+        &self.metrics
+    }
+
+    /// Seconds since this store was created (server uptime).
+    pub fn uptime_seconds(&self) -> u64 {
+        self.started_at.elapsed().as_secs()
     }
 
     pub async fn set(&self, key: String, value: String) {
@@ -116,6 +129,7 @@ impl ConcurrentStore {
         if expires_at <= current_unix_seconds() {
             shard.expirations.remove(key);
             shard.data.remove(key);
+            self.metrics.record_expired(1);
             None
         } else {
             shard.data.get(key).cloned()
@@ -139,6 +153,7 @@ impl ConcurrentStore {
             if expires_at <= current_unix_seconds() {
                 shard.expirations.remove(key);
                 shard.data.remove(key);
+                self.metrics.record_expired(1);
                 return false;
             }
         }

@@ -71,17 +71,37 @@ Health check / connectivity check (useful later for TCP).
 Response:
 - `+PONG`
 
-### `STATS` / `/STATS`
+Note: on a server started with `RIVER_PASSWORD`, `PING` requires an
+authenticated connection like any other command. See `docs/security.md`.
 
-Prints runtime store metrics.
+### `AUTH <password>`
+
+Authenticates the current TCP connection. Only meaningful when the server
+was started with `RIVER_PASSWORD`; otherwise it replies with an error.
 
 Response:
+- `+OK` on success
+- `-ERROR authentication failed` on wrong credentials
+- `-ERROR authentication not required` when auth is disabled
+
+### `STATS` / `/STATS`
+
+Prints runtime metrics. The first two lines keep the historical shape:
 
 ```text
-$23
 keys: 3
 operations: 12
+uptime: 45
+commands: 20
+commands_set: 5
+...
 ```
+
+Full field list: `keys`, `operations`, `uptime`, `commands`,
+`commands_set/get/del/expire/setex/ping/stats/health/exit`,
+`connections_active`, `connections_total`, `command_errors`,
+`protocol_errors`, `expired_keys`, `cleanup_runs`, `persistence_saves`,
+`persistence_failures`. See `docs/observability.md`.
 
 The operations count includes `SET`, `GET`, and `DEL` calls. Calling `STATS` does not increment the operations counter.
 

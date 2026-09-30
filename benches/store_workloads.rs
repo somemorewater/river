@@ -28,8 +28,7 @@ fn seeded(shards: usize) -> (tokio::runtime::Runtime, Arc<ConcurrentStore>) {
 
 fn bench_concurrent<F>(c: &mut Criterion, group_name: &'static str, workload: F)
 where
-    F: Fn(Arc<ConcurrentStore>, usize) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>>
-        + Copy,
+    F: Fn(Arc<ConcurrentStore>, usize) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Copy,
 {
     let mut group = c.benchmark_group(group_name);
     group.measurement_time(Duration::from_secs(5));
@@ -69,29 +68,19 @@ fn bench_mixed(c: &mut Criterion) {
     // (name, get_pct, set_pct); del_pct is the remainder.
     for (name, get_pct, set_pct) in [("get70/set20/del10", 70, 20), ("get50/set40/del10", 50, 40)] {
         for tasks in [1usize, 4, 16, 64] {
-            group.bench_with_input(
-                BenchmarkId::new(name, tasks),
-                &tasks,
-                |b, &tasks| {
-                    let rt = common::new_runtime();
-                    b.iter_custom(|iters| {
-                        let (_, store) = seeded(16);
-                        let start = Instant::now();
-                        rt.block_on(async {
-                            for _ in 0..iters {
-                                run_mixed_workload(
-                                    Arc::clone(&store),
-                                    tasks,
-                                    get_pct,
-                                    set_pct,
-                                )
-                                .await;
-                            }
-                        });
-                        start.elapsed()
+            group.bench_with_input(BenchmarkId::new(name, tasks), &tasks, |b, &tasks| {
+                let rt = common::new_runtime();
+                b.iter_custom(|iters| {
+                    let (_, store) = seeded(16);
+                    let start = Instant::now();
+                    rt.block_on(async {
+                        for _ in 0..iters {
+                            run_mixed_workload(Arc::clone(&store), tasks, get_pct, set_pct).await;
+                        }
                     });
-                },
-            );
+                    start.elapsed()
+                });
+            });
         }
     }
     group.finish();

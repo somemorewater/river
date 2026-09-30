@@ -22,6 +22,9 @@ pub enum Command {
     Ping,
     Stats,
     Health,
+    Auth {
+        password: String,
+    },
     Exit,
 }
 
@@ -29,6 +32,24 @@ pub enum Command {
 pub enum ParseError {
     UnknownCommand,
     InvalidSyntax,
+}
+
+impl Command {
+    /// Stable uppercase name used for metrics and debug logging.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Set { .. } => "SET",
+            Self::SetEx { .. } => "SETEX",
+            Self::Get { .. } => "GET",
+            Self::Del { .. } => "DEL",
+            Self::Expire { .. } => "EXPIRE",
+            Self::Ping => "PING",
+            Self::Stats => "STATS",
+            Self::Health => "HEALTH",
+            Self::Auth { .. } => "AUTH",
+            Self::Exit => "EXIT",
+        }
+    }
 }
 
 pub fn parse_parts(parts: &[String]) -> Result<Option<Command>, ParseError> {
@@ -87,6 +108,14 @@ pub fn parse_parts(parts: &[String]) -> Result<Option<Command>, ParseError> {
                 return Err(ParseError::InvalidSyntax);
             }
             Ok(Some(Command::Ping))
+        }
+        "AUTH" => {
+            if parts.len() != 2 {
+                return Err(ParseError::InvalidSyntax);
+            }
+            Ok(Some(Command::Auth {
+                password: parts[1].clone(),
+            }))
         }
         "STATS" | "/STATS" => {
             if parts.len() != 1 {
@@ -207,6 +236,24 @@ mod tests {
                 seconds: 60,
                 value: "abc".to_string()
             }))
+        );
+    }
+
+    #[test]
+    fn parses_auth_command() {
+        assert_eq!(
+            parse_parts(&["AUTH".to_string(), "s3cr3t".to_string()]),
+            Ok(Some(Command::Auth {
+                password: "s3cr3t".to_string()
+            }))
+        );
+        assert_eq!(
+            parse_parts(&["AUTH".to_string()]),
+            Err(ParseError::InvalidSyntax)
+        );
+        assert_eq!(
+            parse_parts(&["auth".to_string(), "x".to_string(), "y".to_string()]),
+            Err(ParseError::InvalidSyntax)
         );
     }
 

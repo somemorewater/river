@@ -1,4 +1,6 @@
+use river::auth::AuthConfig;
 use river::cli::CliArgs;
+use river::logging;
 use river::persistence::storage::{self, DEFAULT_DB_PATH};
 use river::store::engine::RiverStore;
 use river::store::shared::ConcurrentStore;
@@ -7,6 +9,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
+    logging::init_logging();
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let first = argv.first().map(String::as_str).unwrap_or("server");
     match first {
@@ -44,16 +47,16 @@ async fn run_server() -> i32 {
     let persisted = match storage::load_from_disk(&db_path) {
         Ok(Some(mut store)) => {
             store.cleanup_expired_on_startup();
-            println!("River DB restored from {}", db_path.display());
+            tracing::info!("restored store from {}", db_path.display());
             store
         }
         Ok(None) => {
-            println!("River DB starting with empty store");
+            tracing::info!("starting with empty store");
             RiverStore::new()
         }
         Err(error) => {
-            eprintln!(
-                "ERROR: Failed to load {}: {error}. Starting with empty store.",
+            tracing::error!(
+                "failed to load {}: {error}; starting with empty store",
                 db_path.display()
             );
             RiverStore::new()
@@ -68,17 +71,23 @@ async fn run_server() -> i32 {
                 .unwrap_or(8)
         });
     let store = Arc::new(ConcurrentStore::from_persisted(persisted, shard_count).await);
+    let auth = AuthConfig::from_env();
+    if auth.is_enabled() {
+        tracing::info!("authentication enabled (RIVER_PASSWORD is set)");
+    } else {
+        tracing::info!("authentication disabled (localhost development mode)");
+    }
 
-    match river::server::tcp::start_server(store, &address, db_path).await {
+    match river::server::tcp::start_server(store, &address, db_path, auth).await {
         Ok(()) => 0,
         Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
-            eprintln!(
-                "ERROR: {address} is already in use. Stop the process using that port or run with RIVER_ADDR=127.0.0.1:6380."
+            tracing::error!(
+                "{address} is already in use; stop that process or run with RIVER_ADDR=127.0.0.1:6380"
             );
             1
         }
         Err(error) => {
-            eprintln!("ERROR: {error}");
+            tracing::error!("server failed: {error}");
             1
         }
     }
