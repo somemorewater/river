@@ -72,6 +72,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             archive_ext: zip
             can_run: true
+            # Native-console stdio mediated by PowerShell hung indefinitely
+            # on this runner image, so this target uses a Python harness
+            # (native Win32 process control + hard timeouts) instead.
+            harness: python
           - name: windows-aarch64
             runner: windows-11-arm
             target: aarch64-pc-windows-msvc
@@ -162,7 +166,7 @@ jobs:
           file "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
 
       - name: Smoke test (Windows, native arch)
-        if: runner.os == 'Windows' && matrix.can_run
+        if: runner.os == 'Windows' && matrix.can_run && matrix.harness != 'python'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -200,6 +204,11 @@ jobs:
             Stop-Process -Id $proc.Id -ErrorAction SilentlyContinue
           }
           'smoke test passed'
+
+      - name: Smoke test (Windows x86_64 harness)
+        if: matrix.harness == 'python'
+        shell: pwsh
+        run: python .github/scripts/windows_smoke.py --exe "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" --port 2107 --db "$env:RUNNER_TEMP\smoke.db"
 
       - name: Package archive (Unix)
         if: runner.os != 'Windows'
