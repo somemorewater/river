@@ -62,23 +62,23 @@ Response
 
 ## Installation
 
-River v1.0.0 ships one executable per platform with both subcommands:
+River v1.1.0 ships one executable per platform with both subcommands:
 `river server` starts the database, `river cli` opens the interactive client.
 
 Download the archive for your platform from the
-[v1.0.0 release](https://github.com/somemorewater/river/releases/tag/v1.0.0):
+[v1.1.0 release](https://github.com/somemorewater/river/releases/tag/v1.1.0):
 
 | Platform | Archive |
 |---|---|
-| Linux x86_64 | [river-v1.0.0-linux-x86_64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.0.0/river-v1.0.0-linux-x86_64.tar.gz) |
-| Linux aarch64 | [river-v1.0.0-linux-aarch64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.0.0/river-v1.0.0-linux-aarch64.tar.gz) |
-| macOS x86_64 | [river-v1.0.0-macos-x86_64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.0.0/river-v1.0.0-macos-x86_64.tar.gz) |
-| macOS aarch64 | [river-v1.0.0-macos-aarch64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.0.0/river-v1.0.0-macos-aarch64.tar.gz) |
-| Windows x86_64 | [river-v1.0.0-windows-x86_64.zip](https://github.com/somemorewater/river/releases/download/v1.0.0/river-v1.0.0-windows-x86_64.zip) |
-| Windows aarch64 | [river-v1.0.0-windows-aarch64.zip](https://github.com/somemorewater/river/releases/download/v1.0.0/river-v1.0.0-windows-aarch64.zip) |
+| Linux x86_64 | [river-v1.1.0-linux-x86_64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.1.0/river-v1.1.0-linux-x86_64.tar.gz) |
+| Linux aarch64 | [river-v1.1.0-linux-aarch64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.1.0/river-v1.1.0-linux-aarch64.tar.gz) |
+| macOS x86_64 | [river-v1.1.0-macos-x86_64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.1.0/river-v1.1.0-macos-x86_64.tar.gz) |
+| macOS aarch64 | [river-v1.1.0-macos-aarch64.tar.gz](https://github.com/somemorewater/river/releases/download/v1.1.0/river-v1.1.0-macos-aarch64.tar.gz) |
+| Windows x86_64 | [river-v1.1.0-windows-x86_64.zip](https://github.com/somemorewater/river/releases/download/v1.1.0/river-v1.1.0-windows-x86_64.zip) |
+| Windows aarch64 | [river-v1.1.0-windows-aarch64.zip](https://github.com/somemorewater/river/releases/download/v1.1.0/river-v1.1.0-windows-aarch64.zip) |
 
 Verify checksums with
-[SHA256SUMS](https://github.com/somemorewater/river/releases/download/v1.0.0/SHA256SUMS):
+[SHA256SUMS](https://github.com/somemorewater/river/releases/download/v1.1.0/SHA256SUMS):
 
 ```bash
 sha256sum -c SHA256SUMS
@@ -87,21 +87,17 @@ sha256sum -c SHA256SUMS
 On Windows (PowerShell):
 
 ```powershell
-(Get-FileHash river-v1.0.0-windows-x86_64.zip -Algorithm SHA256).Hash
+(Get-FileHash river-v1.1.0-windows-x86_64.zip -Algorithm SHA256).Hash
 # compare against the matching line in SHA256SUMS
 ```
 
 Extract and run (Linux/macOS):
 
 ```bash
-tar -xzf river-v1.0.0-linux-x86_64.tar.gz
+tar -xzf river-v1.1.0-linux-x86_64.tar.gz
 cd linux-x86_64
 ./river server
 ```
-
-The existing v1.0.0 release binaries predate the built-in web client. To use
-the web console and integrated documentation before a newer release is
-published, build the current source as shown below.
 
 On macOS, clear the quarantine flag on first run if Gatekeeper blocks it:
 
@@ -112,7 +108,7 @@ xattr -d com.apple.quarantine river
 On Windows (PowerShell):
 
 ```powershell
-Expand-Archive river-v1.0.0-windows-x86_64.zip -DestinationPath river-win
+Expand-Archive river-v1.1.0-windows-x86_64.zip -DestinationPath river-win
 cd river-win
 .\river.exe server
 ```

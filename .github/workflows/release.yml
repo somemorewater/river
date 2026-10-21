@@ -24,9 +24,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version label for archive names (e.g. v1.0.0)"
+        description: "Version label for archive names (e.g. v1.1.0)"
         required: false
-        default: "v1.0.0"
+        default: "v1.1.0"
 
 permissions:
   contents: read
