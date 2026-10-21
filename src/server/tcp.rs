@@ -19,6 +19,16 @@ pub async fn start_server(
     auth: AuthConfig,
 ) -> std::io::Result<()> {
     let listener = TcpListener::bind(address).await?;
+    serve_bound_listener(listener, store, db_path, auth).await
+}
+
+pub async fn serve_bound_listener(
+    listener: TcpListener,
+    store: Arc<ConcurrentStore>,
+    db_path: PathBuf,
+    auth: AuthConfig,
+) -> std::io::Result<()> {
+    let address = listener.local_addr()?;
     tracing::info!("River DB server started on {address}");
     tracing::info!("persistence file: {}", db_path.display());
     serve_on_listener(listener, store, db_path, auth).await
@@ -123,10 +133,8 @@ async fn handle_client(
                         tracing::warn!("rejected unauthenticated command");
                         CommandResponse::Error("ERROR authentication required".to_string())
                     } else {
-                        let response =
-                            handle_parts(&parts, &store, Some(&db_path), &auth).await;
-                        if is_auth_attempt(&parts)
-                            && matches!(response, CommandResponse::Simple(_))
+                        let response = handle_parts(&parts, &store, Some(&db_path), &auth).await;
+                        if is_auth_attempt(&parts) && matches!(response, CommandResponse::Simple(_))
                         {
                             authenticated = true;
                         }

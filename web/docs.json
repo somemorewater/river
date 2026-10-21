@@ -1,0 +1,67 @@
+{
+  "sections": [
+    {"id":"getting-started","title":"Getting Started","group":"Start here","blocks":[
+      {"type":"p","text":"River is a small, experimental in-memory key-value database written in Rust. It has a RESP-inspired TCP protocol and a built-in browser console. River implements a limited command set and is not a Redis replacement."},
+      {"type":"h2","text":"Prerequisites"},
+      {"type":"p","text":"To build from source, install a stable Rust toolchain with Cargo. Downloaded release archives contain the River executable and need no separate frontend runtime. The currently published v1.0.0 binaries predate the built-in web client; build the current source to use the web console and integrated documentation until a newer release is published."},
+      {"type":"h2","text":"Start River"},
+      {"type":"code","lang":"shell","text":"cargo run -- server"},
+      {"type":"p","text":"The server starts TCP on 127.0.0.1:2007 and the web client on http://127.0.0.1:8080. Open the web URL in a browser. The same command API and TCP clients share the running store."},
+      {"type":"h2","text":"Connect with the CLI"},
+      {"type":"code","lang":"shell","text":"cargo run -- cli"},
+      {"type":"h2","text":"First key"},
+      {"type":"code","lang":"river","text":"SET greeting \"hello River\"\nGET greeting\nDEL greeting"},
+      {"type":"p","text":"SET and DEL reply OK. GET returns the stored value, or a null response when the key is missing."}
+    ]},
+    {"id":"commands","title":"Command Reference","group":"Reference","blocks":[
+      {"type":"p","text":"Commands are case-insensitive. The parser requires the argument counts shown below. HTTP console commands use a small quote-aware tokenizer before passing command parts to River’s shared parser."},
+      {"type":"command","name":"SET","syntax":"SET <key> <value>","description":"Store a string value under a key. Replacing a value clears its previous expiration.","example":"SET greeting \"hello River\"","response":"+OK","errors":"Exactly a key and value are required. The HTTP console requires quotes around values containing spaces; the native CLI joins trailing words into the value."},
+      {"type":"command","name":"GET","syntax":"GET <key>","description":"Return a key’s value. Expired keys are removed and treated as missing.","example":"GET greeting","response":"$<length> followed by the value; $-1 when absent or expired","errors":"Requires exactly one key."},
+      {"type":"command","name":"DEL","syntax":"DEL <key>","description":"Delete a key if present. The command replies OK whether or not the key existed.","example":"DEL greeting","response":"+OK","errors":"Requires exactly one key. There is no DELETE alias."},
+      {"type":"command","name":"SETEX","syntax":"SETEX <key> <seconds> <value>","description":"Set a value and expiration in seconds in one command.","example":"SETEX session 60 abc","response":"+OK","errors":"Seconds must be a non-negative integer; argument count must be exact. In the browser, quote values with spaces."},
+      {"type":"command","name":"EXPIRE","syntax":"EXPIRE <key> <seconds>","description":"Set expiration for an existing key.","example":"EXPIRE session 60","response":":1 if the key exists; :0 if missing or expired","errors":"Seconds must be a non-negative integer; argument count must be exact."},
+      {"type":"command","name":"PING","syntax":"PING","description":"Check command execution and reply with PONG.","example":"PING","response":"+PONG","errors":"Extra arguments are invalid."},
+      {"type":"command","name":"STATS","syntax":"STATS (or /STATS)","description":"Return live key and operation counts, uptime, command counters, connection counters, expiration and persistence counters.","example":"STATS","response":"Bulk string containing one name: value field per line","errors":"Takes no arguments. Does not enumerate keys."},
+      {"type":"command","name":"HEALTH","syntax":"HEALTH (or /HEALTH)","description":"Return status, key count, operation count, and uptime.","example":"HEALTH","response":"Bulk string with status, keys, operations, and uptime","errors":"Takes no arguments. This is a store health summary, not a TCP/HTTP listener probe."},
+      {"type":"command","name":"AUTH","syntax":"AUTH <password>","description":"Authenticate a TCP connection when RIVER_PASSWORD is enabled. River’s CLI reads RIVER_PASSWORD and authenticates automatically.","example":"AUTH your-password","response":"+OK when enabled and correct","errors":"Returns authentication failed for an incorrect password, or authentication not required when auth is disabled. The HTTP console instead supplies the password with each request; AUTH is unavailable as an HTTP command."},
+      {"type":"command","name":"EXIT / QUIT","syntax":"EXIT (or QUIT)","description":"Close the current TCP client connection; the server keeps running.","example":"QUIT","response":"TCP connection closes","errors":"Takes no arguments. Unavailable over HTTP so a browser request cannot close the database server."}
+    ]},
+    {"id":"web-client","title":"Web Client Guide","group":"Guides","blocks":[
+      {"type":"p","text":"The built-in client is served by River itself. Its browser JavaScript sends JSON command requests to the same process; the HTTP handler tokenizes input and calls River’s existing command parser and command executor with the shared ConcurrentStore and persistence path."},
+      {"type":"h2","text":"Run a command"},
+      {"type":"p","text":"Choose Console in the top navigation, enter a supported command, then press Enter or select Run command. Example buttons fill and run their command. Documentation’s Try in Console action only prefills the command; you must execute it yourself."},
+      {"type":"h2","text":"Responses and limitations"},
+      {"type":"p","text":"Successful strings and integers display as returned; a missing GET appears as (nil). Parser and execution errors are shown as command errors. Network and authentication failures set the connection state to disconnected. The command history is retained in the browser session."},
+      {"type":"p","text":"The client supports the commands listed in the reference except AUTH and EXIT/QUIT. Supply the configured password in the Server password field. River has no key enumeration command, so the console does not show a key browser. The native CLI additionally supports interactive help and joins trailing SET/SETEX input into the value; the browser uses quoted values with a small shell-like tokenizer."}
+    ]},
+    {"id":"configuration","title":"Server and Configuration","group":"Guides","blocks":[
+      {"type":"p","text":"Start the server with river server or cargo run -- server. Bare cargo run also starts the server. River binds both required listeners before announcing startup; if either bind fails, startup exits with an error."},
+      {"type":"table","headers":["Setting","Default","Purpose"],"rows":[["RIVER_ADDR","127.0.0.1:2007","TCP RESP listener address"],["RIVER_HTTP_ADDR","127.0.0.1:8080","Web client HTTP listener address"],["RIVER_DB_PATH","river.db","Snapshot file path"],["RIVER_SHARDS","available CPU parallelism × 4 (fallback 8)","Concurrent store shard count; invalid or missing values use the default"],["RIVER_PASSWORD","unset","Enables single-password auth when non-empty"],["RIVER_LOG","info","Log level: error, warn, info, debug"]]},
+      {"type":"code","lang":"shell","text":"RIVER_ADDR=127.0.0.1:2008 RIVER_HTTP_ADDR=127.0.0.1:8081 cargo run -- server\ncargo run -- server --http-addr 127.0.0.1:8081"},
+      {"type":"p","text":"The command-line --http-addr option overrides RIVER_HTTP_ADDR. River has no TCP command-line address override; use RIVER_ADDR. Stop the foreground server with Ctrl+C (or terminate the process). River does not currently implement coordinated graceful shutdown or a signal handler."},
+      {"type":"h2","text":"Security"},
+      {"type":"p","text":"Both listeners default to loopback. Binding beyond localhost exposes the database to that network. Set RIVER_PASSWORD, restrict network access, and use a trusted tunnel or separately secured transport. The HTTP interface uses ordinary HTTP; password and data are not encrypted in transit. Authentication is one shared password, not users or permissions."}
+    ]},
+    {"id":"architecture","title":"Architecture","group":"Technical","blocks":[
+      {"type":"p","text":"River has two transports into one command and storage path. TCP accepts RESP-inspired frames; HTTP serves the embedded console and accepts JSON command requests. Both share Arc<ConcurrentStore>, command parsing, execution, and persistence."},
+      {"type":"code","lang":"text","text":"TCP bytes → RESP decoder → command parts ─┐\n                                          ├→ parser → handler → ConcurrentStore\nHTTP JSON → web tokenizer → command parts ┘                         ↓\n                                                     snapshot persistence\nTCP response ← RESP encoder         HTTP JSON response ← response mapping"},
+      {"type":"p","text":"ConcurrentStore shards data behind asynchronous read/write locks. The RiverStore snapshot model stores string values and expiration timestamps. The command layer performs key operations and asks persistence to write snapshots after mutations. The TCP layer decodes/encodes RESP; the HTTP layer maps structured command responses to JSON and never implements storage operations of its own."},
+      {"type":"p","text":"The TCP server starts a one-second expiration cleanup worker. Expired keys are also removed on reads. HTTP and TCP commands operate on the same live store."}
+    ]},
+    {"id":"persistence","title":"Persistence and Durability","group":"Technical","blocks":[
+      {"type":"p","text":"River persists full binary snapshots using serde and bincode. RIVER_DB_PATH selects the file; the default is river.db. Each successful SET, SETEX, DEL, and EXPIRE of an existing key triggers a snapshot write. Background cleanup also saves when it removes expired keys."},
+      {"type":"p","text":"Startup restores a readable snapshot and removes keys that expired while River was offline. A missing file starts empty. If the snapshot is corrupt or unreadable, River logs an error and starts empty; it does not recover prior data from a log."},
+      {"type":"p","text":"Snapshot writes use a temporary file and rename. This is not an append-only log or a guarantee against every crash, filesystem, or hardware failure. A mutation can already have changed in-memory state if persistence fails, and the command reports a persistence error. Keep backups of data that matters."}
+    ]},
+    {"id":"troubleshooting","title":"Troubleshooting","group":"Reference","blocks":[
+      {"type":"h2","text":"Server fails to start"},
+      {"type":"p","text":"Check that both RIVER_ADDR (default 127.0.0.1:2007) and RIVER_HTTP_ADDR (default 127.0.0.1:8080) are available. A bind failure is logged and startup exits. Change the occupied address with the matching environment variable or --http-addr for HTTP."},
+      {"type":"h2","text":"Browser cannot connect"},
+      {"type":"p","text":"Confirm River is still running and open the exact URL printed at startup. The web client defaults to 127.0.0.1:8080; if configured to another address or port, use that URL. If the browser loads but commands fail, check the server password field when RIVER_PASSWORD is set."},
+      {"type":"h2","text":"Invalid command or unexpected response"},
+      {"type":"p","text":"Use the exact syntax in Command Reference. River returns ERROR unknown command for unsupported names and ERROR invalid syntax for incorrect arity or invalid TTL values. GET returns null for a missing or expired key; DEL always replies OK, including for a missing key."},
+      {"type":"h2","text":"Persistence or recovery issue"},
+      {"type":"p","text":"Check that RIVER_DB_PATH points to the intended location and that River can write there. Startup logs whether a snapshot was restored; missing files start empty, and unreadable or corrupt snapshots cause an error log and an empty store. Snapshot persistence is not a transaction log."}
+    ]}
+  ]
+}

@@ -18,37 +18,26 @@ The current implementation focuses on clarity and modularity: a Tokio TCP server
 ## High-Level Architecture
 
 ```
-TCP client
-  ↓
-server::tcp (byte networking)
-  ↓
-protocol::resp (decode frame)
-  ↓
-commands::parser (parse command parts)
-  ↓
-commands::handle_parts (execute + format)
+TCP client → server::tcp → protocol::resp ─┐
+                                           ├→ commands::parser → handle_parts
+Browser → server::web (HTTP/JSON) ─────────┘
+                                                   ↓
   ↓
 store::shared::ConcurrentStore (sharded, async RwLock)
   ├── partitions (shards)
   ├── per-shard expirations
   └── background cleanup
-  ↓
-persistence::storage (save mutations + cleanup)
-  ↓
-protocol::resp (encode response)
-  ↓
-socket response bytes
+       persistence::storage (save mutations + cleanup)
+TCP: RESP encoded socket response  |  HTTP: JSON response
 ```
 
 ## Data Flow
 
-1. The TCP server accepts a client connection on `127.0.0.1:2007` (or `$RIVER_ADDR`).
-2. Each connected client is handled in its own Tokio task.
-3. Socket bytes are decoded into RESP-style frames.
-4. Command arrays are parsed into a `Command` enum (or rejected with an error).
-5. The command module executes the command against shared `ConcurrentStore` state.
-6. Mutating commands save the store to disk.
-7. A response is encoded as RESP and written back to the client.
+1. TCP accepts connections on `127.0.0.1:2007` (`RIVER_ADDR`); HTTP serves the embedded console on `127.0.0.1:8080` (`RIVER_HTTP_ADDR`).
+2. TCP bytes are decoded as RESP; the HTTP endpoint decodes JSON and tokenizes its command string.
+3. Both transports pass command parts to the shared parser and command handler.
+4. The handler operates on shared `ConcurrentStore` state; mutations save a snapshot.
+5. TCP responses are encoded as RESP and HTTP responses as JSON.
 
 ## Why This Structure?
 

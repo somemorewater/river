@@ -6,6 +6,7 @@ ACLs — that is a deliberate later milestone, not an omission by accident.
 Source:
 - `src/auth.rs` (configuration, constant-time comparison)
 - Session gating: `src/server/tcp.rs`
+- HTTP password checks: `src/server/web.rs`
 - `AUTH` execution: `src/commands/mod.rs`
 - CLI auto-auth: `src/cli/repl.rs`, `src/cli/client.rs`
 
@@ -57,12 +58,15 @@ s3cr3t
 
 - Default bind is `127.0.0.1:2007` (loopback only). This is the safe
   default and is unchanged.
+- The embedded web client binds to `127.0.0.1:8080` by default. HTTP checks
+  the configured password on each command request; it does not use a
+  persistent TCP authentication session.
 - Localhost without a password is fine for development.
 - Binding to a non-loopback interface exposes River to that network:
   enable `RIVER_PASSWORD` first, prefer binding to loopback plus an SSH
   tunnel or VPN, and treat the deployment as network-exposed.
 - **Password authentication does NOT encrypt traffic.** Credentials and
-  data travel in cleartext RESP. Do not use password auth as the sole
+  data travel in cleartext RESP or HTTP. Do not use password auth as the sole
   protection on an untrusted network; provide transport security
   (tunnel/VPN/loopback) separately. No TLS in this milestone.
 

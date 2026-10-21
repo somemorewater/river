@@ -4,34 +4,25 @@ This document describes how River is organized today and why the modules are sep
 
 ## System Flow
 
-River currently behaves like a tiny Redis-style TCP database server:
+River is a small key-value server with TCP/RESP and HTTP transports. Both use
+the same parser, command handler, concurrent store, and persistence path:
 
 ```
-TCP Client
-  ↓
-TCP Layer
-  ↓
-RESP Protocol Parser
-  ↓
-Command Parser
-  ↓
-Command Handler
-  ↓
-Store
+TCP Client → TCP Layer → RESP decoder ─┐
+                                       ├→ Command Parser → Command Handler → Store
+Browser → HTTP API → command tokenizer ┘                                  ↓
   ├── Data Store
   ├── Expiration Store
   └── Cleanup System
-  ↓
 Persistence (mutations + cleanup)
-  ↓
-RESP Encoder
-  ↓
-Response Bytes
+TCP response: RESP encoder → response bytes
+HTTP response: structured JSON
 ```
 
 Mapping to code:
 
 - **TCP Layer**: `src/server/tcp.rs`
+- **HTTP and embedded client**: `src/server/web.rs`, `web/`
 - **Protocol Layer**: `src/protocol/resp.rs`, `src/protocol/frame.rs`
 - **Parser**: `src/commands/parser.rs`
 - **Command Handler**: `src/commands/mod.rs`
@@ -109,6 +100,15 @@ write bytes
 
 Each client connection runs in its own Tokio task.
 Shared database state is held in an `Arc<ConcurrentStore>`, which shards keys across multiple `RwLock`-protected partitions to reduce lock contention and allow parallel reads.
+
+## HTTP and Browser Client
+
+The server embeds the static client files and documentation content in its
+executable. HTTP command input is split into command parts by the web layer,
+then validated and run by the shared command parser and handler. The HTTP
+layer maps those responses to JSON and has no separate storage engine. The
+web listener is configured with `RIVER_HTTP_ADDR` (default
+`127.0.0.1:8080`); TCP remains `RIVER_ADDR` (default `127.0.0.1:2007`).
 
 ## Observability Path
 

@@ -9,6 +9,7 @@ River is inspired by Redis, but it is intentionally minimal and not intended to 
 
 - In-memory key-value store (`HashMap<String, String>`)
 - Tokio-based TCP server on `127.0.0.1:2007`
+- Embedded browser console and HTTP command API on `127.0.0.1:8080`
 - RESP-inspired structured protocol
 - TTL expiration with `EXPIRE` and `SETEX`
 - Shared in-memory state across multiple clients (sharded, async `RwLock`)
@@ -98,6 +99,10 @@ cd linux-x86_64
 ./river server
 ```
 
+The existing v1.0.0 release binaries predate the built-in web client. To use
+the web console and integrated documentation before a newer release is
+published, build the current source as shown below.
+
 On macOS, clear the quarantine flag on first run if Gatekeeper blocks it:
 
 ```bash
@@ -141,7 +146,7 @@ cargo build --release
 
 ## Running
 
-Start the TCP server (River is currently a TCP database server, not a CLI/REPL application):
+Start River's TCP database server and built-in web console:
 
 ```bash
 cargo run
@@ -157,7 +162,33 @@ You should see:
 
 ```
 River DB server started on 127.0.0.1:2007
+web client available at http://127.0.0.1:8080
 ```
+
+Open <http://127.0.0.1:8080> for the browser console. It sends commands
+through River's shared command parser and executor to the same live store as
+TCP clients. Try `PING`, `SET name River`, `GET name`, `DEL name`, or `STATS`.
+Values containing spaces can be quoted, for example `SET greeting "hello River"`.
+
+Configure the web listener with `RIVER_HTTP_ADDR` (default
+`127.0.0.1:8080`) or a command-line override:
+
+```bash
+RIVER_HTTP_ADDR=127.0.0.1:8081 cargo run -- server
+cargo run -- server --http-addr 127.0.0.1:8081
+```
+
+The web listener is required: if its address or the TCP address cannot bind,
+River reports the startup error and exits. The web server uses the existing
+`RIVER_PASSWORD` setting; enter that password in the console when enabled.
+The default loopback bind is intended for local development. Binding the web
+server beyond localhost exposes the database command API to that network;
+enable `RIVER_PASSWORD` and use a trusted network or tunnel. HTTP carries
+passwords and commands without transport encryption. Keep the HTTP bind local
+unless you have separately secured the connection.
+
+The browser console has no key enumeration because River does not implement
+it; `STATS` and `HEALTH` expose the existing live server information.
 
 If port `2007` is already in use, run on another local port:
 
@@ -319,6 +350,11 @@ src/
   server/
     mod.rs
     tcp.rs           # Tokio TCP listener + client handling
+    web.rs           # Embedded HTTP console + command endpoint
+web/
+  index.html         # Embedded console markup
+  app.css            # Console styles
+  app.js             # Browser client
   protocol/
     mod.rs
     frame.rs         # RESP-style frame definitions
@@ -356,7 +392,6 @@ docs/
 - Crash recovery / durability: append-only log or equivalent, checksums/manifests, documented guarantees (snapshots only today)
 - INFO command: richer runtime introspection (memory hints, persistence state)
 - Richer Redis client compatibility
-- HTTP endpoints for status or diagnostics
 - Expiration upgrades: eviction policies (LRU/LFU), advanced cleanup scheduling, per-key TTL inspection
 - Persistence upgrades: append-only logs, background snapshots without blocking, checksums, compression, crash recovery manifests
 - Next scaling steps: dedicated worker model, richer observability

@@ -10,7 +10,6 @@ Potential protocol upgrades:
 
 - Pipelining
 - Richer Redis client compatibility
-- HTTP endpoints for status or diagnostics
 - Authentication handshake before command execution
 
 ## Persistence Upgrades

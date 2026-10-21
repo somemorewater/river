@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1018">
+  <title>River Console</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="#console" aria-label="River home"><span class="mark">R</span><span>river<span class="brand-light"> console</span></span></a>
+      <nav class="primary-nav" aria-label="Workspace navigation"><a id="nav-console" href="#console" class="active">Console</a><a id="nav-docs" href="#docs">Documentation</a></nav>
+      <div class="connection"><span id="status-dot" class="dot"></span><span id="status-text">Checking connection…</span><span class="divider"></span><span class="endpoint">local instance</span></div>
+    </header>
+    <section id="console-view">
+    <section class="intro">
+      <div><p class="eyebrow">DATABASE WORKSPACE</p><h1>Command console</h1><p class="subhead">Inspect and update your River instance.</p></div>
+      <div class="server-chip"><span class="chip-icon">◈</span><span><small>SERVER</small><strong>River · RESP</strong></span></div>
+    </section>
+    <section class="workspace">
+      <div class="console-panel panel">
+        <div class="panel-head"><div><span class="section-label">COMMAND</span><h2>Run a command</h2></div><span class="shortcut">ENTER <kbd>↵</kbd></span></div>
+        <form id="command-form">
+          <label class="input-label" for="command-input">Command</label>
+          <div class="command-input-wrap"><span class="prompt">&gt;</span><input id="command-input" autocomplete="off" spellcheck="false" placeholder="SET greeting &#34;hello River&#34;" autofocus><button id="run-button" type="submit"><span>Run command</span><span aria-hidden="true">↗</span></button></div>
+          <div class="form-meta"><span>Use quotes for values with spaces.</span><button id="clear-button" type="button" class="text-button">Clear output</button></div>
+        </form>
+        <div class="examples"><span class="input-label">TRY AN EXAMPLE</span><div class="example-list"><button type="button" data-command="PING">PING</button><button type="button" data-command="SET greeting &quot;hello River&quot;">SET greeting “hello River”</button><button type="button" data-command="GET greeting">GET greeting</button><button type="button" data-command="STATS">STATS</button></div></div>
+        <div class="output-heading"><span class="section-label">RESPONSE</span><span id="response-meta">Ready</span></div>
+        <div id="output" class="output empty"><span class="output-glyph">↳</span><span>Run a command to see its response here.</span></div>
+      </div>
+      <aside class="side-column">
+        <section class="panel status-panel"><div class="panel-head compact"><div><span class="section-label">OVERVIEW</span><h2>Instance status</h2></div><span class="status-icon">◉</span></div><div class="status-card"><div class="status-line"><span id="health-dot" class="dot"></span><strong id="health-label">Checking</strong></div><p id="health-detail">Confirming the River server is reachable.</p></div><div class="info-row"><span>HTTP API</span><strong>Connected locally</strong></div><div class="info-row"><span>Data source</span><strong>Live River store</strong></div></section>
+        <section class="panel help-panel"><span class="section-label">QUICK REFERENCE</span><h2>Key operations</h2><div class="operation"><code>SET key value</code><span>Store a value</span></div><div class="operation"><code>GET key</code><span>Read a value</span></div><div class="operation"><code>DEL key</code><span>Remove a key</span></div><div class="operation"><code>SETEX key seconds value</code><span>Store with expiry</span></div><p class="note">River does not currently support key enumeration. Use <code>STATS</code> to see the live key count.</p></section>
+        <section class="auth-panel"><label for="password-input">Server password <span>(if configured)</span></label><input id="password-input" type="password" autocomplete="current-password" placeholder="RIVER_PASSWORD"></section>
+      </aside>
+    </section>
+    </section>
+    <section id="docs-view" class="docs-view" hidden>
+      <div class="docs-heading"><div><p class="eyebrow">RIVER HANDBOOK</p><h1>Documentation</h1><p class="subhead">Learn how River works, configure your server, and explore supported commands.</p></div><label class="docs-search"><span aria-hidden="true">⌕</span><input id="docs-search" type="search" placeholder="Search documentation…" aria-label="Search documentation"><kbd>/</kbd></label></div>
+      <div class="docs-layout"><aside class="docs-sidebar"><div id="docs-nav" aria-label="Documentation sections"></div></aside><article id="docs-content" class="docs-content" aria-live="polite"><div class="docs-loading">Loading documentation…</div></article></div>
+    </section>
+    <footer><span>River Console <span class="footer-version">· built into the server</span></span><span>Requests run against your active River instance</span></footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
